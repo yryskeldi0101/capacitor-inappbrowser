@@ -568,6 +568,11 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         configuration.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
         configuration.preferences.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
 
+        // Enable file downloads
+        if #available(iOS 13.0, *) {
+            configuration.preferences.setValue(true, forKey: "downloadsEnabled")
+        }
+
         // Enable zoom
         configuration.preferences.setValue(true, forKey: "zoomEnabled")
 
@@ -591,6 +596,12 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
         // Enable console messages
         configuration.preferences.setValue(true, forKey: "consoleMessagesEnabled")
+
+        // Enable file downloads
+        configuration.preferences.setValue(true, forKey: "downloadsEnabled")
+
+        // Enable camera and microphone access
+        configuration.preferences.setValue(true, forKey: "mediaCaptureEnabled")
 
         let userContentController = WKUserContentController()
         userContentController.add(self, name: "messageHandler")
@@ -990,6 +1001,10 @@ fileprivate extension WKWebViewController {
             case .stop:
                 return stopBarButtonItem
             case .activity:
+                // Skip activity button if toolbarType is SIMPLE
+                if let toolbarType = self.capBrowserPlugin?.toolbarType, toolbarType == "simple" {
+                    return nil
+                }
                 return activityBarButtonItem
             case .done:
                 return doneBarButtonItem

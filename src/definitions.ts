@@ -41,6 +41,11 @@ export enum ToolBarType {
    * @since 0.1.0
    */
   BLANK = 'blank',
+  /**
+   * Shows a simple toolbar with just a close button (no share button)
+   * @since 7.8.0
+   */
+  SIMPLE = 'simple',
 }
 
 export interface Headers {
