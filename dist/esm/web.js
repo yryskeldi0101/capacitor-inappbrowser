@@ -44,5 +44,9 @@ export class InAppBrowserWeb extends WebPlugin {
         console.log("postMessage", options);
         return options;
     }
+    requestPermission(options) {
+        console.log("requestPermission", options);
+        return Promise.resolve(undefined);
+    }
 }
 //# sourceMappingURL=web.js.map

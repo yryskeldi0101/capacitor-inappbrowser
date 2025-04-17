@@ -74,6 +74,10 @@ var capacitorInAppBrowser = (function (exports, core) {
             console.log("postMessage", options);
             return options;
         }
+        requestPermission(options) {
+            console.log("requestPermission", options);
+            return Promise.resolve(undefined);
+        }
     }
 
     var web = /*#__PURE__*/Object.freeze({
