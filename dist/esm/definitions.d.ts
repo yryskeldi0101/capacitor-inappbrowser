@@ -37,7 +37,12 @@ export declare enum ToolBarType {
      * Shows no toolbar
      * @since 0.1.0
      */
-    BLANK = "blank"
+    BLANK = "blank",
+    /**
+     * Shows a simple toolbar with just a close button (no share button)
+     * @since 0.1.0
+     */
+    SIMPLE = "simple"
 }
 export interface Headers {
     [key: string]: string;
