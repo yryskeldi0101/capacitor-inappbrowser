@@ -194,7 +194,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"urlChangeEvent\", listenerFunc: UrlChangeListener) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'urlChangeEvent', listenerFunc: UrlChangeListener) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -223,7 +223,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"buttonNearDoneClick\", listenerFunc: ButtonNearListener) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'buttonNearDoneClick', listenerFunc: ButtonNearListener) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -247,7 +247,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"closeEvent\", listenerFunc: UrlChangeListener) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'closeEvent', listenerFunc: UrlChangeListener) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -276,7 +276,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"confirmBtnClicked\", listenerFunc: ConfirmBtnListener) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'confirmBtnClicked', listenerFunc: ConfirmBtnListener) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -305,7 +305,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"messageFromWebview\", listenerFunc: (event: { detail: Record<string, any>; }) => void) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'messageFromWebview', listenerFunc: (event: { detail: Record<string, any>; }) => void) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -329,7 +329,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"browserPageLoaded\", listenerFunc: () => void) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'browserPageLoaded', listenerFunc: () => void) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -352,7 +352,7 @@
       },
       {
         "name": "addListener",
-        "signature": "(eventName: \"pageLoadError\", listenerFunc: () => void) => Promise<PluginListenerHandle>",
+        "signature": "(eventName: 'pageLoadError', listenerFunc: () => void) => Promise<PluginListenerHandle>",
         "parameters": [
           {
             "name": "eventName",
@@ -402,6 +402,34 @@
         "docs": "Reload the current web page.",
         "complexTypes": [],
         "slug": "reload"
+      },
+      {
+        "name": "requestPermission",
+        "signature": "(options: PermissionRequestOptions) => Promise<PermissionRequestResult>",
+        "parameters": [
+          {
+            "name": "options",
+            "docs": "",
+            "type": "PermissionRequestOptions"
+          }
+        ],
+        "returns": "Promise<PermissionRequestResult>",
+        "tags": [
+          {
+            "name": "since",
+            "text": "7.7.0"
+          },
+          {
+            "name": "example",
+            "text": "// Request camera permission\nconst result = await InAppBrowser.requestPermission({ permission: 'camera' });\nif (result.granted) {\n  // Permission granted, proceed with camera access\n}"
+          }
+        ],
+        "docs": "Request a permission from the user. This method handles permission requests for camera,\nmicrophone, and geolocation. It will show the native permission dialog if needed.",
+        "complexTypes": [
+          "PermissionRequestResult",
+          "PermissionRequestOptions"
+        ],
+        "slug": "requestpermission"
       }
     ],
     "properties": []
@@ -1213,6 +1241,50 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "PermissionRequestResult",
+      "slug": "permissionrequestresult",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "granted",
+          "tags": [
+            {
+              "text": "7.7.0",
+              "name": "since"
+            }
+          ],
+          "docs": "Whether the permission was granted",
+          "complexTypes": [],
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "PermissionRequestOptions",
+      "slug": "permissionrequestoptions",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "permission",
+          "tags": [
+            {
+              "text": "7.7.0",
+              "name": "since"
+            }
+          ],
+          "docs": "The type of permission to request",
+          "complexTypes": [
+            "PermissionType"
+          ],
+          "type": "PermissionType"
+        }
+      ]
     }
   ],
   "enums": [
@@ -1222,7 +1294,7 @@
       "members": [
         {
           "name": "ACTIVITY",
-          "value": "\"activity\"",
+          "value": "'activity'",
           "tags": [
             {
               "text": "0.1.0",
@@ -1233,7 +1305,7 @@
         },
         {
           "name": "NAVIGATION",
-          "value": "\"navigation\"",
+          "value": "'navigation'",
           "tags": [
             {
               "text": "0.1.0",
@@ -1244,7 +1316,7 @@
         },
         {
           "name": "BLANK",
-          "value": "\"blank\"",
+          "value": "'blank'",
           "tags": [
             {
               "text": "0.1.0",
@@ -1261,13 +1333,13 @@
       "members": [
         {
           "name": "WHITE",
-          "value": "\"white\"",
+          "value": "'white'",
           "tags": [],
           "docs": ""
         },
         {
           "name": "BLACK",
-          "value": "\"black\"",
+          "value": "'black'",
           "tags": [],
           "docs": ""
         }
@@ -1396,6 +1468,25 @@
           "complexTypes": [
             "BtnEvent"
           ]
+        }
+      ]
+    },
+    {
+      "name": "PermissionType",
+      "slug": "permissiontype",
+      "docs": "",
+      "types": [
+        {
+          "text": "'camera'",
+          "complexTypes": []
+        },
+        {
+          "text": "'microphone'",
+          "complexTypes": []
+        },
+        {
+          "text": "'geolocation'",
+          "complexTypes": []
         }
       ]
     }

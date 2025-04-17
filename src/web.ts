@@ -5,7 +5,7 @@ import type {
   OpenWebViewOptions,
   OpenOptions,
   GetCookieOptions,
-  ClearCookieOptions,
+  ClearCookieOptions, PermissionRequestOptions,
 } from "./definitions";
 
 export class InAppBrowserWeb extends WebPlugin implements InAppBrowserPlugin {
@@ -59,5 +59,10 @@ export class InAppBrowserWeb extends WebPlugin implements InAppBrowserPlugin {
   async postMessage(options: Record<string, any>): Promise<any> {
     console.log("postMessage", options);
     return options;
+  }
+
+  requestPermission(options: PermissionRequestOptions): Promise<any> {
+    console.log("requestPermission", options);
+    return Promise.resolve(undefined);
   }
 }

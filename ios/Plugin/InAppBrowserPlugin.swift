@@ -13,6 +13,7 @@ extension UIColor {
             G: CGFloat((int >> 08) & 0xff) / 255,
             B: CGFloat((int >> 00) & 0xff) / 255
         )
+
         self.init(red: components.R, green: components.G, blue: components.B, alpha: 1)
     }
 

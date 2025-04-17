@@ -1,5 +1,5 @@
 import { WebPlugin } from "@capacitor/core";
-import type { InAppBrowserPlugin, OpenWebViewOptions, OpenOptions, GetCookieOptions, ClearCookieOptions } from "./definitions";
+import type { InAppBrowserPlugin, OpenWebViewOptions, OpenOptions, GetCookieOptions, ClearCookieOptions, PermissionRequestOptions } from "./definitions";
 export declare class InAppBrowserWeb extends WebPlugin implements InAppBrowserPlugin {
     clearAllCookies(): Promise<any>;
     clearCache(): Promise<any>;
@@ -16,4 +16,5 @@ export declare class InAppBrowserWeb extends WebPlugin implements InAppBrowserPl
     }): Promise<any>;
     reload(): Promise<any>;
     postMessage(options: Record<string, any>): Promise<any>;
+    requestPermission(options: PermissionRequestOptions): Promise<any>;
 }

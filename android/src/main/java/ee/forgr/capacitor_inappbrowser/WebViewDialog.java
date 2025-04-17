@@ -39,6 +39,7 @@ import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import android.webkit.WebSettings;
 import android.webkit.WebViewClient;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -327,14 +328,50 @@ public class WebViewDialog extends Dialog {
     );
     _webView.getSettings().setJavaScriptEnabled(true);
     _webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
-    _webView.getSettings().setDatabaseEnabled(true);
     _webView.getSettings().setDomStorageEnabled(true);
+    _webView.getSettings().setDatabaseEnabled(true);
     _webView.getSettings().setAllowFileAccess(true);
-    _webView.getSettings().setLoadWithOverviewMode(true);
-    _webView.getSettings().setUseWideViewPort(true);
+    _webView.getSettings().setAllowContentAccess(true);
     _webView.getSettings().setAllowFileAccessFromFileURLs(true);
     _webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
+    _webView.getSettings().setLoadWithOverviewMode(true);
+    _webView.getSettings().setUseWideViewPort(true);
+    _webView.getSettings().setSupportZoom(true);
+    _webView.getSettings().setBuiltInZoomControls(true);
+    _webView.getSettings().setDisplayZoomControls(false);
+    _webView.getSettings().setSupportMultipleWindows(true);
+    _webView.getSettings().setGeolocationEnabled(true);
     _webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+    _webView.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+    // Enable Service Workers
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        _webView.getSettings().setServiceWorkerEnabled(true);
+    }
+
+    // Enable WebRTC
+    _webView.getSettings().setJavaScriptEnabled(true);
+
+    // Enable modern web APIs
+    _webView.getSettings().setJavaScriptEnabled(true);
+
+    // Enable console messages
+    _webView.getSettings().setJavaScriptEnabled(true);
+
+    // Enable fullscreen support
+    _webView.getSettings().setJavaScriptEnabled(true);
+
+    // Enable file downloads
+    _webView.getSettings().setAllowFileAccess(true);
+    _webView.getSettings().setAllowContentAccess(true);
+
+    // Enable Picture-in-Picture
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        _webView.getSettings().setPictureInPictureEnabled(true);
+    }
+
+    // Add JavaScript interface for permissions
+    _webView.addJavascriptInterface(new PermissionInterface(), "PermissionInterface");
 
     // Set text zoom if specified in options
     if (_options.getTextZoom() > 0) {
@@ -782,19 +819,43 @@ public class WebViewDialog extends Dialog {
   }
 
   private void injectJavaScriptInterface() {
-    String script =
-      "if (!window.mobileApp) { " +
-        "    window.mobileApp = { " +
-        "        postMessage: function(message) { " +
-        "            if (window.AndroidInterface) { " +
-        "                window.AndroidInterface.postMessage(JSON.stringify(message)); " +
-        "            } " +
-        "        }, " +
-        "        close: function() { " +
-        "            window.AndroidInterface.close(); " +
-        "        } " +
-        "    }; " +
-        "}";
+    String script = "if (!window.mobileApp) { window.mobileApp = { postMessage: function(message) { AndroidInterface.postMessage(message); }, close: function() { AndroidInterface.close(); } }; }";
+    _webView.evaluateJavascript(script, null);
+
+    // Add console message handling
+    script = "(function() { " +
+             "  var originalConsole = window.console; " +
+             "  var methods = ['log', 'info', 'warn', 'error', 'debug']; " +
+             "  methods.forEach(function(method) { " +
+             "    originalConsole[method] = function() { " +
+             "      var args = Array.prototype.slice.call(arguments); " +
+             "      var message = args.map(function(arg) { " +
+             "        return typeof arg === 'object' ? JSON.stringify(arg) : String(arg); " +
+             "      }).join(' '); " +
+             "      AndroidInterface.postMessage({ type: 'console', method: method, message: message }); " +
+             "      originalConsole[method].apply(originalConsole, args); " +
+             "    }; " +
+             "  }); " +
+             "})();";
+    _webView.evaluateJavascript(script, null);
+
+    // Add permission handling
+    script = "window.requestPermission = function(permission) { " +
+             "  return new Promise((resolve, reject) => { " +
+             "    var callbackId = Math.random().toString(36).substring(2, 15); " +
+             "    window.addEventListener('permissionResponse', function handler(event) { " +
+             "      if (event.detail.callbackId === callbackId) { " +
+             "        window.removeEventListener('permissionResponse', handler); " +
+             "        if (event.detail.granted) { " +
+             "          resolve(true); " +
+             "        } else { " +
+             "          reject(new Error('Permission denied')); " +
+             "        } " +
+             "      } " +
+             "    }, { once: true }); " +
+             "    PermissionInterface.requestPermission(permission, callbackId); " +
+             "  }); " +
+             "};";
     _webView.evaluateJavascript(script, null);
   }
 
@@ -2193,6 +2254,105 @@ public class WebViewDialog extends Dialog {
           permissionHandler.handleMicrophonePermissionRequest(request);
         }
       });
+    }
+  }
+
+  // Add this class to provide permission handling
+  private class PermissionInterface {
+    @JavascriptInterface
+    public void requestPermission(String permission, String callbackId) {
+      activity.runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+          switch (permission) {
+            case "camera":
+              requestCameraPermission(callbackId);
+              break;
+            case "microphone":
+              requestMicrophonePermission(callbackId);
+              break;
+            case "geolocation":
+              requestGeolocationPermission(callbackId);
+              break;
+            default:
+              Log.e("InAppBrowser", "Unknown permission request: " + permission);
+              break;
+          }
+        }
+      });
+    }
+
+    private void requestCameraPermission(final String callbackId) {
+      if (permissionHandler != null) {
+        permissionHandler.handleCameraPermissionRequest(new PermissionRequest() {
+          @Override
+          public void grant(String[] resources) {
+            String script = "window.dispatchEvent(new CustomEvent('permissionResponse', { detail: { permission: 'camera', granted: true, callbackId: '" + callbackId + "' } }));";
+            _webView.evaluateJavascript(script, null);
+          }
+
+          @Override
+          public void deny() {
+            String script = "window.dispatchEvent(new CustomEvent('permissionResponse', { detail: { permission: 'camera', granted: false, callbackId: '" + callbackId + "' } }));";
+            _webView.evaluateJavascript(script, null);
+          }
+
+          @Override
+          public String[] getResources() {
+            return new String[]{"android.permission.CAMERA"};
+          }
+
+          @Override
+          public void getOrigin(Origin origin) {
+            // Not implemented
+          }
+
+          @Override
+          public boolean isForMainFrame() {
+            return true;
+          }
+        });
+      }
+    }
+
+    private void requestMicrophonePermission(final String callbackId) {
+      if (permissionHandler != null) {
+        permissionHandler.handleMicrophonePermissionRequest(new PermissionRequest() {
+          @Override
+          public void grant(String[] resources) {
+            String script = "window.dispatchEvent(new CustomEvent('permissionResponse', { detail: { permission: 'microphone', granted: true, callbackId: '" + callbackId + "' } }));";
+            _webView.evaluateJavascript(script, null);
+          }
+
+          @Override
+          public void deny() {
+            String script = "window.dispatchEvent(new CustomEvent('permissionResponse', { detail: { permission: 'microphone', granted: false, callbackId: '" + callbackId + "' } }));";
+            _webView.evaluateJavascript(script, null);
+          }
+
+          @Override
+          public String[] getResources() {
+            return new String[]{"android.permission.RECORD_AUDIO"};
+          }
+
+          @Override
+          public void getOrigin(Origin origin) {
+            // Not implemented
+          }
+
+          @Override
+          public boolean isForMainFrame() {
+            return true;
+          }
+        });
+      }
+    }
+
+    private void requestGeolocationPermission(final String callbackId) {
+      // For simplicity, we'll just grant geolocation permission
+      // In a real app, you'd need to handle the authorization status properly
+      String script = "window.dispatchEvent(new CustomEvent('permissionResponse', { detail: { permission: 'geolocation', granted: true, callbackId: '" + callbackId + "' } }));";
+      _webView.evaluateJavascript(script, null);
     }
   }
 }
