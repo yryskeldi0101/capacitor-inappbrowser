@@ -1324,6 +1324,17 @@
             }
           ],
           "docs": "Shows no toolbar"
+        },
+        {
+          "name": "SIMPLE",
+          "value": "'simple'",
+          "tags": [
+            {
+              "text": "0.1.0",
+              "name": "since"
+            }
+          ],
+          "docs": "Shows a simple toolbar with just a close button (no share button)"
         }
       ]
     },

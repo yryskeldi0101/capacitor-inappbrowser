@@ -23,6 +23,11 @@ var capacitorInAppBrowser = (function (exports, core) {
          * @since 0.1.0
          */
         ToolBarType["BLANK"] = "blank";
+        /**
+         * Shows a simple toolbar with just a close button (no share button)
+         * @since 0.1.0
+         */
+        ToolBarType["SIMPLE"] = "simple";
     })(exports.ToolBarType || (exports.ToolBarType = {}));
 
     const InAppBrowser = core.registerPlugin("InAppBrowser", {
