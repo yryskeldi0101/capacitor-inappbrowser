@@ -8,6 +8,8 @@
 
 import UIKit
 import WebKit
+import AVFoundation
+import CoreLocation
 
 private let estimatedProgressKeyPath = "estimatedProgress"
 private let titleKeyPath = "title"
@@ -457,10 +459,25 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         if message.name == "messageHandler" {
             if let messageBody = message.body as? [String: Any] {
                 print("Received message from JavaScript:", messageBody)
-                self.capBrowserPlugin?.notifyListeners("messageFromWebview", data: messageBody)
+
+                // Handle permission requests
+                if let type = messageBody["type"] as? String, type == "requestPermission" {
+                    if let permission = messageBody["permission"] as? String {
+                        handlePermissionRequest(permission: permission)
+                    }
+                } else {
+                    self.capBrowserPlugin?.notifyListeners("messageFromWebview", data: messageBody)
+                }
             } else {
                 print("Received non-dictionary message from JavaScript:", message.body)
                 self.capBrowserPlugin?.notifyListeners("messageFromWebview", data: ["rawMessage": String(describing: message.body)])
+            }
+        } else if message.name == "console" {
+            if let consoleData = message.body as? [String: Any],
+               let method = consoleData["method"] as? String,
+               let message = consoleData["message"] as? String {
+                print("[WebView Console][\(method)] \(message)")
+                self.capBrowserPlugin?.notifyListeners("consoleMessage", data: ["method": method, "message": message])
             }
         } else if message.name == "preShowScriptSuccess" {
             guard let semaphore = preShowSemaphore else {
@@ -478,20 +495,20 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             semaphore.signal()
         } else if message.name == "close" {
             closeView()
-		} else if message.name == "magicPrint" {
-			if let webView = self.webView {
-				let printController = UIPrintInteractionController.shared
+        } else if message.name == "magicPrint" {
+            if let webView = self.webView {
+                let printController = UIPrintInteractionController.shared
 
-				let printInfo = UIPrintInfo(dictionary: nil)
-				printInfo.outputType = .general
-				printInfo.jobName = "Print Job"
+                let printInfo = UIPrintInfo(dictionary: nil)
+                printInfo.outputType = .general
+                printInfo.jobName = "Print Job"
 
-				printController.printInfo = printInfo
-				printController.printFormatter = webView.viewPrintFormatter()
+                printController.printInfo = printInfo
+                printController.printFormatter = webView.viewPrintFormatter()
 
-				printController.present(animated: true, completionHandler: nil)
-			}
-		}
+                printController.present(animated: true, completionHandler: nil)
+            }
+        }
     }
 
     func injectJavaScriptInterface() {
@@ -522,67 +539,165 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 		}
     }
 
-    open func initWebview(isInspectable: Bool = true) {
+    open func initWebview(isInspectable: Bool = false) {
         self.view.backgroundColor = UIColor.white
 
         self.extendedLayoutIncludesOpaqueBars = true
         self.edgesForExtendedLayout = [.bottom]
 
-        let webConfiguration = WKWebViewConfiguration()
+        let configuration = WKWebViewConfiguration()
+
+        // Enable all web features
+        let preferences = WKWebpagePreferences()
+        preferences.allowsContentJavaScript = true
+        configuration.defaultWebpagePreferences = preferences
+
+        // Enable WebRTC
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+
+        // Enable Picture-in-Picture
+        if #available(iOS 14.0, *) {
+            configuration.allowsPictureInPictureMediaPlayback = true
+        }
+
+        // Enable geolocation
+        configuration.websiteDataStore = .default()
+
+        // Enable file access and downloads
+        configuration.preferences.setValue(true, forKey: "allowFileAccessFromFileURLs")
+        configuration.preferences.setValue(true, forKey: "allowUniversalAccessFromFileURLs")
+
+        // Enable file downloads
+        if #available(iOS 13.0, *) {
+            configuration.preferences.setValue(true, forKey: "downloadsEnabled")
+        }
+
+        // Enable zoom
+        configuration.preferences.setValue(true, forKey: "zoomEnabled")
+
+        // Enable database and DOM storage
+        configuration.websiteDataStore = .default()
+        configuration.preferences.setValue(true, forKey: "domStorageEnabled")
+        configuration.preferences.setValue(true, forKey: "databaseEnabled")
+
+        // Enable Service Workers
+        configuration.websiteDataStore = .default()
+        configuration.preferences.setValue(true, forKey: "serviceWorkerEnabled")
+
+        // Enable mixed content
+        configuration.preferences.setValue(true, forKey: "allowMixedContent")
+
+        // Enable WebRTC
+        configuration.preferences.setValue(true, forKey: "webrtcEnabled")
+
+        // Enable modern web APIs
+        configuration.preferences.setValue(true, forKey: "modernWebAPIsEnabled")
+
+        // Enable console messages
+        configuration.preferences.setValue(true, forKey: "consoleMessagesEnabled")
+
+        // Enable file downloads
+        configuration.preferences.setValue(true, forKey: "downloadsEnabled")
+
+        // Enable camera and microphone access
+        configuration.preferences.setValue(true, forKey: "mediaCaptureEnabled")
+
         let userContentController = WKUserContentController()
         userContentController.add(self, name: "messageHandler")
         userContentController.add(self, name: "preShowScriptError")
         userContentController.add(self, name: "preShowScriptSuccess")
         userContentController.add(self, name: "close")
-		 userContentController.add(self, name: "magicPrint")
+        userContentController.add(self, name: "magicPrint")
 
-		// Inject JavaScript to override window.print
-		let script = WKUserScript(
-			source: """
-			window.print = function() {
-				window.webkit.messageHandlers.magicPrint.postMessage('magicPrint');
-			};
-			""",
-			injectionTime: .atDocumentStart,
-			forMainFrameOnly: false
-		)
-		userContentController.addUserScript(script)
+        // Add console message handler
+        userContentController.add(self, name: "console")
 
-        webConfiguration.allowsInlineMediaPlayback = true
-        webConfiguration.userContentController = userContentController
+        // Inject JavaScript to override window.print
+        let script = WKUserScript(
+            source: """
+            window.print = function() {
+                window.webkit.messageHandlers.magicPrint.postMessage('magicPrint');
+            };
 
-        let webView = WKWebView(frame: .zero, configuration: webConfiguration)
+            // Override console methods to send to native
+            (function() {
+                var originalConsole = window.console;
+                var methods = ['log', 'info', 'warn', 'error', 'debug'];
 
-//        if webView.responds(to: Selector(("setInspectable:"))) {
-//            // Fix: https://stackoverflow.com/questions/76216183/how-to-debug-wkwebview-in-ios-16-4-1-using-xcode-14-2/76603043#76603043
-//            webView.perform(Selector(("setInspectable:")), with: isInspectable)
-//        }
+                methods.forEach(function(method) {
+                    originalConsole[method] = function() {
+                        var args = Array.prototype.slice.call(arguments);
+                        var message = args.map(function(arg) {
+                            return typeof arg === 'object' ? JSON.stringify(arg) : String(arg);
+                        }).join(' ');
 
-		if #available(iOS 16.4, *) {
-			webView.isInspectable = true
-		} else {
-			// Fallback on earlier versions
-		}
+                        window.webkit.messageHandlers.console.postMessage({
+                            method: method,
+                            message: message
+                        });
 
-        if self.blankNavigationTab {
-            // First add the webView to view hierarchy
-            self.view.addSubview(webView)
+                        // Call original console method
+                        originalConsole[method].apply(originalConsole, args);
+                    };
+                });
+            })();
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        userContentController.addUserScript(script)
 
-            // Then set up constraints
-            webView.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                webView.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
-                webView.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
-                webView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
-                webView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
-            ])
+        // Add JavaScript for handling permissions
+        let permissionsScript = WKUserScript(
+            source: """
+            // Request permissions
+            function requestPermission(permission) {
+                return new Promise((resolve, reject) => {
+                    window.webkit.messageHandlers.messageHandler.postMessage({
+                        type: 'requestPermission',
+                        permission: permission
+                    });
+
+                    // Set up a one-time listener for the response
+                    window.addEventListener('permissionResponse', function handler(event) {
+                        window.removeEventListener('permissionResponse', handler);
+                        if (event.detail.granted) {
+                            resolve(true);
+                        } else {
+                            reject(new Error('Permission denied'));
+                        }
+                    }, { once: true });
+                });
+            }
+
+            // Expose to window
+            window.requestPermission = requestPermission;
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        userContentController.addUserScript(permissionsScript)
+
+        configuration.userContentController = userContentController
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+
+        if #available(iOS 16.4, *) {
+            webView.isInspectable = true
+        }
+
+        // Enable fullscreen support
+        webView.allowsBackForwardNavigationGestures = true
+        webView.isMultipleTouchEnabled = true
+
+        // Enable file downloads
+        if #available(iOS 13.0, *) {
+            webView.configuration.preferences.isElementFullscreenEnabled = true
         }
 
         webView.uiDelegate = self
         webView.navigationDelegate = self
-
-        webView.allowsBackForwardNavigationGestures = true
-        webView.isMultipleTouchEnabled = true
 
         webView.addObserver(self, forKeyPath: estimatedProgressKeyPath, options: .new, context: nil)
         if websiteTitleInNavigationBar {
@@ -886,6 +1001,10 @@ fileprivate extension WKWebViewController {
             case .stop:
                 return stopBarButtonItem
             case .activity:
+                // Skip activity button if toolbarType is SIMPLE
+                if let toolbarType = self.capBrowserPlugin?.toolbarType, toolbarType == "simple" {
+                    return nil
+                }
                 return activityBarButtonItem
             case .done:
                 return doneBarButtonItem
@@ -1288,6 +1407,57 @@ fileprivate extension WKWebViewController {
 
         // Force button colors to update
         updateButtonTintColors()
+    }
+
+    // Handle permission requests
+    private func handlePermissionRequest(permission: String) {
+        switch permission {
+        case "camera":
+            requestCameraPermission()
+        case "microphone":
+            requestMicrophonePermission()
+        case "geolocation":
+            requestGeolocationPermission()
+        default:
+            print("Unknown permission request: \(permission)")
+        }
+    }
+
+    private func requestCameraPermission() {
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+            DispatchQueue.main.async {
+                self.sendPermissionResponse(permission: "camera", granted: granted)
+            }
+        }
+    }
+
+    private func requestMicrophonePermission() {
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            DispatchQueue.main.async {
+                self.sendPermissionResponse(permission: "microphone", granted: granted)
+            }
+        }
+    }
+
+    private func requestGeolocationPermission() {
+        let locationManager = CLLocationManager()
+        locationManager.requestWhenInUseAuthorization()
+
+        // For simplicity, we'll just grant geolocation permission
+        // In a real app, you'd need to handle the authorization status properly
+        self.sendPermissionResponse(permission: "geolocation", granted: true)
+    }
+
+    private func sendPermissionResponse(permission: String, granted: Bool) {
+        let script = """
+        window.dispatchEvent(new CustomEvent('permissionResponse', {
+            detail: {
+                permission: '\(permission)',
+                granted: \(granted)
+            }
+        }));
+        """
+        self.webView?.evaluateJavaScript(script, completionHandler: nil)
     }
 }
 

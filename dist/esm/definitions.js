@@ -20,5 +20,10 @@ export var ToolBarType;
      * @since 0.1.0
      */
     ToolBarType["BLANK"] = "blank";
+    /**
+     * Shows a simple toolbar with just a close button (no share button)
+     * @since 0.1.0
+     */
+    ToolBarType["SIMPLE"] = "simple";
 })(ToolBarType || (ToolBarType = {}));
 //# sourceMappingURL=definitions.js.map
