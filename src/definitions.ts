@@ -587,6 +587,7 @@ export interface InAppBrowserPlugin {
  * @since 6.10.0
  */
 export interface InAppBrowserWebViewAPIs {
+
   /**
    * mobileApp - Global object injected into the WebView providing communication with the native app
    */
