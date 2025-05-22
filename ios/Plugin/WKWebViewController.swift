@@ -146,23 +146,23 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     private func setupSpinner() {
         // Remove existing spinner if any
         loadingSpinner?.removeFromSuperview()
-        
+
         // Create new spinner
         loadingSpinner = UIActivityIndicatorView(style: .large)
         if let spinner = loadingSpinner {
             spinner.translatesAutoresizingMaskIntoConstraints = false
             spinner.color = .gray // Make spinner more visible
             spinner.hidesWhenStopped = true
-            
+
             // Add to view
             view.addSubview(spinner)
-            
+
             // Center in view
             NSLayoutConstraint.activate([
                 spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
             ])
-            
+
             // Start animating immediately
             spinner.startAnimating()
         }
@@ -434,7 +434,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     func updateButtonTintColors() {
         // Set tint color based on background color
         let buttonTintColor = backgroundColor == .white ? UIColor.black : (tintColor ?? navigationController?.navigationBar.tintColor ?? .white)
-        
+
         // Ensure all button items use the correct tint color
         backBarButtonItem.tintColor = buttonTintColor
         forwardBarButtonItem.tintColor = buttonTintColor
@@ -515,9 +515,9 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         // Очищаем очередь сообщений перед обработкой нового
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
+
             print("[InAppBrowser] Received message: \(message.name)")
-            
+
             switch message.name {
             case "close":
                 print("[InAppBrowser] Processing close request")
@@ -574,7 +574,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
         let webConfiguration = WKWebViewConfiguration()
         let userContentController = WKUserContentController()
-        
+
         // Register message handlers
         userContentController.add(self, name: "mobileApp")
         userContentController.add(self, name: "messageHandler")
@@ -598,7 +598,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                 }
             };
         """
-        
+
         let userScript = WKUserScript(
             source: bridgeScript,
             injectionTime: .atDocumentStart,
@@ -657,6 +657,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             // Re-add spinner after adding WebView
             setupSpinner()
         }
+
 
         self.webView = webView
         self.webView?.customUserAgent = self.customUserAgent ?? self.userAgent ?? self.originalUserAgent
@@ -1270,29 +1271,29 @@ fileprivate extension WKWebViewController {
 
     public func closeView() {
         print("[InAppBrowser] Starting closeView")
-        
+
         // Проверяем, можно ли закрыть view
         var canDismiss = true
         if let url = self.source?.url {
             canDismiss = delegate?.webViewController?(self, canDismiss: url) ?? true
         }
-        
+
         if canDismiss {
             print("[InAppBrowser] Proceeding with dismissal")
-            
+
             // Сохраняем URL перед очисткой
             let currentUrl = webView?.url?.absoluteString ?? ""
-            
+
             // Сначала уведомляем о закрытии
             self.capBrowserPlugin?.notifyListeners("closeEvent", data: ["url": currentUrl])
-            
+
             // Затем очищаем WebView
             cleanupWebView()
-            
+
             // И наконец закрываем view controller
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                
+
                 if let presentingViewController = self.presentingViewController {
                     print("[InAppBrowser] Dismissing from presenting view controller")
                     presentingViewController.dismiss(animated: true, completion: nil)
@@ -1364,30 +1365,30 @@ fileprivate extension WKWebViewController {
 
     private func cleanupWebView() {
         print("[InAppBrowser] Starting cleanup")
-        
+
         // Проверяем, что webView существует
         guard let webView = self.webView else {
             print("[InAppBrowser] WebView is already nil during cleanup")
             return
         }
-        
+
         // Останавливаем загрузку
         webView.stopLoading()
-        
+
         // Удаляем наблюдатели
         webView.removeObserver(self, forKeyPath: estimatedProgressKeyPath)
         if websiteTitleInNavigationBar {
             webView.removeObserver(self, forKeyPath: titleKeyPath)
         }
         webView.removeObserver(self, forKeyPath: #keyPath(WKWebView.url))
-        
+
         // Очищаем все скрипты и обработчики
         webView.configuration.userContentController.removeAllUserScripts()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "messageHandler")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "close")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "preShowScriptSuccess")
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "preShowScriptError")
-        
+
         // Очищаем кэш и данные
         WKWebsiteDataStore.default().removeData(
             ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
@@ -1412,7 +1413,7 @@ extension WKWebViewController: WKUIDelegate {
             self.present(alertController, animated: true, completion: nil)
         }
     }
-    
+
     @available(iOS 15.0, *)
     public func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (Bool) -> Void) {
         if type == .camera {
@@ -1422,15 +1423,15 @@ extension WKWebViewController: WKUIDelegate {
                     message: "Приложению требуется доступ к камере. Разрешить?",
                     preferredStyle: .alert
                 )
-                
+
                 alertController.addAction(UIAlertAction(title: "Разрешить", style: .default) { _ in
                     decisionHandler(true)
                 })
-                
+
                 alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel) { _ in
                     decisionHandler(false)
                 })
-                
+
                 self.present(alertController, animated: true)
             }
         } else {
@@ -1527,11 +1528,11 @@ extension WKWebViewController: WKNavigationDelegate {
             delegate?.webViewController?(self, didFinish: url)
         }
         self.capBrowserPlugin?.notifyListeners("browserPageLoaded", data: [:])
-        
+
         // Handle permissions
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
+
             for permission in self.permissions {
                 switch permission {
                 case "camera":
@@ -1558,7 +1559,7 @@ extension WKWebViewController: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         // Stop spinner on error
         loadingSpinner?.stopAnimating()
-        
+
         updateBarButtonItems()
         self.progressView?.progress = 0
         if let url = webView.url {
@@ -1571,7 +1572,7 @@ extension WKWebViewController: WKNavigationDelegate {
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         // Stop spinner on error
         loadingSpinner?.stopAnimating()
-        
+
         updateBarButtonItems()
         self.progressView?.progress = 0
         if let url = webView.url {
@@ -1662,7 +1663,7 @@ extension WKWebViewController: WKNavigationDelegate {
 
     private func handleCameraPermission() {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
-        
+
         switch status {
         case .notDetermined:
             // First time request
@@ -1671,7 +1672,7 @@ extension WKWebViewController: WKNavigationDelegate {
                 message: "This app needs access to your camera. Allow access?",
                 preferredStyle: .alert
             )
-            
+
             alertController.addAction(UIAlertAction(title: "Allow", style: .default) { _ in
                 AVCaptureDevice.requestAccess(for: .video) { granted in
                     print("Camera permission granted: \(granted)")
@@ -1682,11 +1683,11 @@ extension WKWebViewController: WKNavigationDelegate {
                     }
                 }
             })
-            
+
             alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-            
+
             self.present(alertController, animated: true)
-            
+
         case .restricted, .denied:
             // Show settings alert
             let alertController = UIAlertController(
@@ -1694,27 +1695,27 @@ extension WKWebViewController: WKNavigationDelegate {
             message: "Пожалуйста, включите доступ к камере в настройках устройства",
             preferredStyle: .alert
 )
-            
+
             alertController.addAction(UIAlertAction(title: "Открыть настройки", style: .default) { _ in
                 if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(settingsUrl)
                 }
             })
-            
+
             alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-            
+
             self.present(alertController, animated: true)
-            
+
         case .authorized:
             // Camera access already granted
             print("Camera access already granted")
             self.capBrowserPlugin?.notifyListeners("cameraAccessGranted", data: [:])
-            
+
         @unknown default:
             break
         }
     }
-    
+
     private func handleMicrophonePermission() {
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
             DispatchQueue.main.async {
@@ -1724,12 +1725,12 @@ extension WKWebViewController: WKNavigationDelegate {
             }
         }
     }
-    
+
     private func handleLocationPermission() {
         let locationManager = CLLocationManager()
         locationManager.requestWhenInUseAuthorization()
     }
-    
+
     private func handleNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             DispatchQueue.main.async {
@@ -1739,7 +1740,7 @@ extension WKWebViewController: WKNavigationDelegate {
             }
         }
     }
-    
+
     private func handleContactsPermission() {
         let store = CNContactStore()
         store.requestAccess(for: .contacts) { granted, error in
@@ -1750,7 +1751,7 @@ extension WKWebViewController: WKNavigationDelegate {
             }
         }
     }
-    
+
     private func handleCalendarPermission() {
         let eventStore = EKEventStore()
         eventStore.requestAccess(to: .event) { granted, error in
@@ -1761,7 +1762,7 @@ extension WKWebViewController: WKNavigationDelegate {
             }
         }
     }
-    
+
     private func handleGalleryPermission() {
         PHPhotoLibrary.requestAuthorization { status in
             DispatchQueue.main.async {
