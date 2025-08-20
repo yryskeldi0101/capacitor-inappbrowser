@@ -15,9 +15,9 @@ export interface BtnEvent {
      */
     url: string;
 }
-export type UrlChangeListener = (state: UrlEvent) => void;
-export type ConfirmBtnListener = (state: BtnEvent) => void;
-export type ButtonNearListener = (state: object) => void;
+export declare type UrlChangeListener = (state: UrlEvent) => void;
+export declare type ConfirmBtnListener = (state: BtnEvent) => void;
+export declare type ButtonNearListener = (state: object) => void;
 export declare enum BackgroundColor {
     WHITE = "white",
     BLACK = "black"

@@ -478,21 +478,21 @@
         {
           "name": "url",
           "tags": [],
-          "docs": "",
+          "docs": "The URL of the cookie.",
           "complexTypes": [],
           "type": "string | undefined"
         },
         {
           "name": "key",
           "tags": [],
-          "docs": "",
+          "docs": "The key of the cookie.",
           "complexTypes": [],
           "type": "string"
         },
         {
           "name": "value",
           "tags": [],
-          "docs": "",
+          "docs": "The value of the cookie.",
           "complexTypes": [],
           "type": "string"
         }
