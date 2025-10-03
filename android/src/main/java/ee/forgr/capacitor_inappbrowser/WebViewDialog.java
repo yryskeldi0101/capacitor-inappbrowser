@@ -94,7 +94,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.constraintlayout.widget.ConstraintSet;
-
+import android.os.Message;
 public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPermissionsResultCallback {
 
   private static class ProxiedRequest {
@@ -345,6 +345,7 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
     webSettings.setAllowFileAccessFromFileURLs(true);
     webSettings.setAllowUniversalAccessFromFileURLs(true);
     webSettings.setMediaPlaybackRequiresUserGesture(false);
+    webSettings.setSupportMultipleWindows(true);
 
     if (_options.getTextZoom() > 0) {
       webSettings.setTextZoom(_options.getTextZoom());
@@ -381,6 +382,78 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
       show();
       _options.getPluginCall().resolve();
     }
+  }
+  private boolean handleSpecialSchemes(Activity activity, WebView mainWebView, String url) {
+    if (url == null) return false;
+    final String lower = url.toLowerCase();
+
+    // 1) Встроенная логика закрытия — оставляем приоритетной
+    if (url.contains("exit=true")) {
+      if (activity != null) {
+        activity.runOnUiThread(() -> {
+          if (_options.getCallbacks() != null) _options.getCallbacks().urlChangeEvent(url);
+          dismiss();
+        });
+      }
+      return true;
+    }
+
+    try {
+      // 2) Прямые схемы
+      if (lower.startsWith("mailto:") || lower.startsWith("tel:") ||
+              lower.startsWith("tg:") || lower.startsWith("whatsapp:")) {
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        activity.startActivity(i);
+        return true;
+      }
+
+      // 3) Универсальные https-лендинги месcенджеров
+      boolean isMessengerUniversal =
+              lower.startsWith("https://t.me/") ||
+                      lower.startsWith("https://wa.me/") ||
+                      lower.startsWith("https://api.whatsapp.com/");
+
+      if (isMessengerUniversal) {
+        try {
+          Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+          activity.startActivity(i); // откроет приложение, если есть хэндлер
+          return true;
+        } catch (ActivityNotFoundException e) {
+          // нет приложения — просто грузим внутри текущего WebView
+          mainWebView.loadUrl(url);
+          return true;
+        }
+      }
+
+      // 4) intent:// (deeplink через браузер)
+      if (lower.startsWith("intent://")) {
+        Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
+        if (intent.resolveActivity(activity.getPackageManager()) != null) {
+          activity.startActivity(intent);
+          return true;
+        } else {
+          String fallbackUrl = intent.getStringExtra("browser_fallback_url");
+          if (!TextUtils.isEmpty(fallbackUrl)) {
+            mainWebView.loadUrl(fallbackUrl);
+            return true;
+          }
+          String pkg = intent.getPackage();
+          if (!TextUtils.isEmpty(pkg)) {
+            Intent market = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=" + pkg));
+            activity.startActivity(market);
+            return true;
+          }
+          return true; // считаем обработанным
+        }
+      }
+    } catch (Exception ignore) {
+      // в случае исключений не падаем, дадим WebView самому решить
+    }
+
+    // По умолчанию — грузим в той же вкладке
+    mainWebView.loadUrl(url);
+    return true;
   }
 
   private void injectAndroidJavaScriptInterface() {
@@ -1431,121 +1504,80 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
     proxiedRequest.semaphore.release();
   }
 
-  private void setWebViewClient() {
-    _webView.setWebViewClient(new WebViewClient() {
-      @Override
-      public void onPageStarted(WebView view, String url, Bitmap favicon) {
-        super.onPageStarted(view, url, favicon);
-        injectAndroidJavaScriptInterface();
-        
-        // Show spinner when page starts loading
-        if (loadingSpinner != null) {
-            loadingSpinner.setVisibility(View.VISIBLE);
-            loadingSpinner.bringToFront();
-        }
-        
-        // Update background color when page starts loading
-        updateBackgroundColor();
-      }
+    private void setWebViewClient() {
+        _webView.setWebViewClient(new WebViewClient() {
 
-      @Override
-      public boolean shouldOverrideUrlLoading(WebView view, String url) {
-        Log.d("WebViewDialog", "Loading URL: " + url);
-        // Check if URL contains exit=true parameter
-        if (url.contains("exit=true")) {
-          Log.d("WebViewDialog", "Exit parameter detected, closing WebView");
-          if (activity != null) {
-            activity.runOnUiThread(() -> {
-              if (_options.getCallbacks() != null) {
-                Log.d("WebViewDialog", "Calling urlChangeEvent");
-                _options.getCallbacks().urlChangeEvent(url);
-              }
-              Log.d("WebViewDialog", "Dismissing WebView");
-              dismiss();
-            });
-          } else {
-            Log.e("WebViewDialog", "Activity is null, cannot dismiss");
-          }
-          return true;
-        }
-        return false;
-      }
-
-      @Override
-      public void onPageFinished(WebView view, String url) {
-        super.onPageFinished(view, url);
-        
-        // Hide spinner when page finishes loading
-        if (loadingSpinner != null) {
-            loadingSpinner.setVisibility(View.GONE);
-        }
-        
-        if (!isInitialized) {
-          isInitialized = true;
-          if (_options.getCallbacks() != null) {
-            _options.getCallbacks().pageLoaded();
-          }
-        }
-
-        // Check camera permission after page load only if camera permission is requested
-        if (activity != null && !cameraAlertShown) {
-          activity.runOnUiThread(() -> {
-            // Check if camera permission is in the requested permissions
-            boolean isCameraPermissionRequested = false;
-            String[] permissions = _options.getPermissions();
-            Log.d("InAppBrowser", "Permissions array: " + (permissions != null ? Arrays.toString(permissions) : "null"));
-            
-            if (permissions != null) {
-              for (String permission : permissions) {
-                Log.d("InAppBrowser", "Checking permission: " + permission);
-                if ("camera".equalsIgnoreCase(permission)) {
-                  isCameraPermissionRequested = true;
-                  Log.d("InAppBrowser", "Camera permission found in array");
-                  break;
+            @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                injectAndroidJavaScriptInterface();
+                if (loadingSpinner != null) {
+                    loadingSpinner.setVisibility(View.VISIBLE);
+                    loadingSpinner.bringToFront();
                 }
-              }
+                updateBackgroundColor();
             }
 
-            // Show alert only if camera permission is requested and not granted
-            if (isCameraPermissionRequested && 
-                ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) 
-                != PackageManager.PERMISSION_GRANTED) {
-              Log.d("InAppBrowser", "Showing camera permission alert");
-              cameraAlertShown = true;
-              new AlertDialog.Builder(activity)
-                .setTitle("Доступ к камере")
-                .setMessage("Для использования камеры необходимо предоставить разрешение")
-                .setPositiveButton("Открыть настройки", (dialog, which) -> {
-                  Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                  Uri uri = Uri.fromParts("package", activity.getPackageName(), null);
-                  intent.setData(uri);
-                  activity.startActivity(intent);
-                })
-                .setNegativeButton("Отмена", (dialog, which) -> {
-                  dialog.dismiss();
-                })
-                .setCancelable(false)
-                .show();
+            // API 21+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = (request != null && request.getUrl() != null) ? request.getUrl().toString() : null;
+                return handleSpecialSchemes(activity, _webView, url);
             }
-          });
-        }
 
-        if (_options.getCallbacks() != null) {
-          _options.getCallbacks().urlChangeEvent(url);
-        }
-      }
+            // Для старых API
+            @Override
+            @Deprecated
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return handleSpecialSchemes(activity, _webView, url);
+            }
 
-      @Override
-      public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-        super.onReceivedError(view, request, error);
-        
-        // Hide spinner on error
-        if (loadingSpinner != null) {
-            loadingSpinner.setVisibility(View.GONE);
-        }
-      }
-    });
-  }
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
+                if (!isInitialized) {
+                    isInitialized = true;
+                    if (_options.getCallbacks() != null) _options.getCallbacks().pageLoaded();
+                }
+                if (activity != null && !cameraAlertShown) {
+                    activity.runOnUiThread(() -> {
+                        boolean isCameraPermissionRequested = false;
+                        String[] permissions = _options.getPermissions();
+                        if (permissions != null) {
+                            for (String permission : permissions) {
+                                if ("camera".equalsIgnoreCase(permission)) { isCameraPermissionRequested = true; break; }
+                            }
+                        }
+                        if (isCameraPermissionRequested &&
+                                ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                            cameraAlertShown = true;
+                            new AlertDialog.Builder(activity)
+                                    .setTitle("Доступ к камере")
+                                    .setMessage("Для использования камеры необходимо предоставить разрешение")
+                                    .setPositiveButton("Открыть настройки", (dialog, which) -> {
+                                        Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                        Uri uri = Uri.fromParts("package", activity.getPackageName(), null);
+                                        intent.setData(uri);
+                                        activity.startActivity(intent);
+                                    })
+                                    .setNegativeButton("Отмена", (dialog, which) -> dialog.dismiss())
+                                    .setCancelable(false)
+                                    .show();
+                        }
+                    });
+                }
+                if (_options.getCallbacks() != null) _options.getCallbacks().urlChangeEvent(url);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
+            }
+        });
+    }
+
 
   @Override
   public void onBackPressed() {
@@ -1813,6 +1845,30 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
   }
 
   private class MyWebChromeClient extends WebChromeClient {
+
+    @Override
+    public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+      // создаём временный WebView, в который Android попытается загрузить popup-URL,
+      // а мы всё перехватим и направим в основной _webView
+      WebView temp = new WebView(view.getContext());
+      temp.setWebViewClient(new WebViewClient() {
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+          String u = (req != null && req.getUrl() != null) ? req.getUrl().toString() : null;
+          return handleSpecialSchemes(activity, _webView, u);
+        }
+        @Override
+        @Deprecated
+        public boolean shouldOverrideUrlLoading(WebView v, String u) {
+          return handleSpecialSchemes(activity, _webView, u);
+        }
+      });
+
+      WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+      transport.setWebView(temp);
+      resultMsg.sendToTarget();
+      return true; // мы создали окно и обработаем загрузку
+    }
     @Override
     public boolean onShowFileChooser(
             WebView webView,
