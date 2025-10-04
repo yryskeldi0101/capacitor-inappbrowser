@@ -9,6 +9,7 @@
 import UIKit
 @preconcurrency import WebKit
 import AVFoundation
+import AudioToolbox            // ⬅️ нужно для бэкап-вибрации (старые iOS)
 import Contacts
 import EventKit
 import Photos
@@ -144,26 +145,17 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     // Add method to setup spinner
     private func setupSpinner() {
-        // Remove existing spinner if any
         loadingSpinner?.removeFromSuperview()
-
-        // Create new spinner
         loadingSpinner = UIActivityIndicatorView(style: .large)
         if let spinner = loadingSpinner {
             spinner.translatesAutoresizingMaskIntoConstraints = false
-            spinner.color = .gray // Make spinner more visible
+            spinner.color = .gray
             spinner.hidesWhenStopped = true
-
-            // Add to view
             view.addSubview(spinner)
-
-            // Center in view
             NSLayoutConstraint.activate([
                 spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
             ])
-
-            // Start animating immediately
             spinner.startAnimating()
         }
     }
@@ -174,7 +166,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         let userAgent = lowercasedHeaders["user-agent"]
         self.headers?.removeValue(forKey: "User-Agent")
         self.headers?.removeValue(forKey: "user-agent")
-
         if let userAgent = userAgent {
             self.customUserAgent = userAgent
         }
@@ -186,27 +177,21 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     internal var customUserAgent: String? {
         didSet {
-            guard let agent = userAgent else {
-                return
-            }
+            guard let agent = userAgent else { return }
             webView?.customUserAgent = agent
         }
     }
 
     open var userAgent: String? {
         didSet {
-            guard let originalUserAgent = originalUserAgent, let userAgent = userAgent else {
-                return
-            }
+            guard let originalUserAgent = originalUserAgent, let userAgent = userAgent else { return }
             webView?.customUserAgent = [originalUserAgent, userAgent].joined(separator: " ")
         }
     }
 
     open var pureUserAgent: String? {
         didSet {
-            guard let agent = pureUserAgent else {
-                return
-            }
+            guard let agent = pureUserAgent else { return }
             webView?.customUserAgent = agent
         }
     }
@@ -218,61 +203,37 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     open var leftNavigationBarItemTypes: [BarButtonItemType] = []
     open var rightNavigaionBarItemTypes: [BarButtonItemType] = []
 
-    // Status bar style to be applied
     open var statusBarStyle: UIStatusBarStyle = .default
-
-    // Status bar background view
     private var statusBarBackgroundView: UIView?
-
-    // Status bar height
     private var statusBarHeight: CGFloat {
         return UIApplication.shared.windows.first?.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
     }
 
-    // Make status bar background with colored view underneath
     open func setupStatusBarBackground(color: UIColor) {
-        // Remove any existing status bar view
         statusBarBackgroundView?.removeFromSuperview()
-
-        // Create a new view to cover both status bar and navigation bar
         statusBarBackgroundView = UIView()
-
         if let navView = navigationController?.view {
-            // Add to back of view hierarchy
             navView.insertSubview(statusBarBackgroundView!, at: 0)
             statusBarBackgroundView?.translatesAutoresizingMaskIntoConstraints = false
-
-            // Calculate total height - status bar + navigation bar
             let navBarHeight = navigationController?.navigationBar.frame.height ?? 44
             let totalHeight = statusBarHeight + navBarHeight
-
-            // Position from top of screen to bottom of navigation bar
             NSLayoutConstraint.activate([
                 statusBarBackgroundView!.topAnchor.constraint(equalTo: navView.topAnchor),
                 statusBarBackgroundView!.leadingAnchor.constraint(equalTo: navView.leadingAnchor),
                 statusBarBackgroundView!.trailingAnchor.constraint(equalTo: navView.trailingAnchor),
                 statusBarBackgroundView!.heightAnchor.constraint(equalToConstant: totalHeight)
             ])
-
-            // Set background color
             statusBarBackgroundView?.backgroundColor = color
-
-            // Make navigation bar transparent to show our view underneath
             navigationController?.navigationBar.setBackgroundImage(UIImage(), for: .default)
             navigationController?.navigationBar.shadowImage = UIImage()
             navigationController?.navigationBar.isTranslucent = true
         }
     }
 
-    // Override to use our custom status bar style
     override open var preferredStatusBarStyle: UIStatusBarStyle {
         return statusBarStyle
     }
-
-    // Force status bar style update when needed
-    open func updateStatusBarStyle() {
-        setNeedsStatusBarAppearanceUpdate()
-    }
+    open func updateStatusBarStyle() { setNeedsStatusBarAppearanceUpdate() }
 
     open var backBarButtonItemImage: UIImage?
     open var forwardBarButtonItemImage: UIImage?
@@ -325,31 +286,23 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     }()
 
     fileprivate lazy var activityBarButtonItem: UIBarButtonItem = {
-        // Check if custom image is provided
         if let image = activityBarButtonItemImage {
             let button = UIBarButtonItem(image: image.withRenderingMode(.alwaysTemplate),
-                                            style: .plain,
-                                            target: self,
-                                            action: #selector(activityDidClick(sender:)))
-
-            // Apply tint from navigation bar or from tintColor property
+                                         style: .plain,
+                                         target: self,
+                                         action: #selector(activityDidClick(sender:)))
             if let tintColor = self.tintColor ?? self.navigationController?.navigationBar.tintColor {
                 button.tintColor = tintColor
             }
-
             print("[DEBUG] Created activity button with custom image")
             return button
         } else {
-            // Use system share icon
             let button = UIBarButtonItem(barButtonSystemItem: .action,
-                                            target: self,
-                                            action: #selector(activityDidClick(sender:)))
-
-            // Apply tint from navigation bar or from tintColor property
+                                         target: self,
+                                         action: #selector(activityDidClick(sender:)))
             if let tintColor = self.tintColor ?? self.navigationController?.navigationBar.tintColor {
                 button.tintColor = tintColor
             }
-
             print("[DEBUG] Created activity button with system action icon")
             return button
         }
@@ -357,10 +310,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     fileprivate lazy var doneBarButtonItem: UIBarButtonItem = {
         if showArrowAsClose {
-            // Show chevron icon when showArrowAsClose is true (originally was arrow.left)
             let chevronImage = UIImage(systemName: "chevron.left")?.withRenderingMode(.alwaysTemplate)
             let barButtonItem = UIBarButtonItem(image: chevronImage, style: .plain, target: self, action: #selector(doneDidClick(sender:)))
-            // Set tint color based on background color
             if backgroundColor == .white {
                 barButtonItem.tintColor = .black
             } else {
@@ -368,10 +319,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             }
             return barButtonItem
         } else {
-            // Show X icon by default
             let xImage = UIImage(systemName: "xmark")?.withRenderingMode(.alwaysTemplate)
             let barButtonItem = UIBarButtonItem(image: xImage, style: .plain, target: self, action: #selector(doneDidClick(sender:)))
-            // Set tint color based on background color
             if backgroundColor == .white {
                 barButtonItem.tintColor = .black
             } else {
@@ -389,9 +338,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     var textZoom: Int?
 
-    var capableWebView: WKWebView? {
-        return webView
-    }
+    var capableWebView: WKWebView? { return webView }
 
     deinit {
         webView?.removeObserver(self, forKeyPath: estimatedProgressKeyPath)
@@ -403,7 +350,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     override open func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-
         if let capacitorStatusBar = capacitorStatusBar {
             self.capBrowserPlugin?.bridge?.webView?.superview?.addSubview(capacitorStatusBar)
             self.capBrowserPlugin?.bridge?.webView?.frame.origin.y = capacitorStatusBar.frame.height
@@ -412,30 +358,18 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     override open func viewDidLoad() {
         super.viewDidLoad()
-        if self.webView == nil {
-            self.initWebview()
-        }
-
-        // Force all buttons to use tint color
+        if self.webView == nil { self.initWebview() }
         updateButtonTintColors()
-
-        // Extra call to ensure buttonNearDone is visible
         if buttonNearDoneIcon != nil {
-            // Delay slightly to ensure navigation items are set up
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.updateButtonTintColors()
-
-                // Force update UI if needed
                 self?.navigationController?.navigationBar.setNeedsLayout()
             }
         }
     }
 
     func updateButtonTintColors() {
-        // Set tint color based on background color
         let buttonTintColor = backgroundColor == .white ? UIColor.black : (tintColor ?? navigationController?.navigationBar.tintColor ?? .white)
-
-        // Ensure all button items use the correct tint color
         backBarButtonItem.tintColor = buttonTintColor
         forwardBarButtonItem.tintColor = buttonTintColor
         reloadBarButtonItem.tintColor = buttonTintColor
@@ -443,52 +377,36 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         activityBarButtonItem.tintColor = buttonTintColor
         doneBarButtonItem.tintColor = buttonTintColor
 
-        // Update navigation items
         if let leftItems = navigationItem.leftBarButtonItems {
-            for item in leftItems {
-                item.tintColor = buttonTintColor
-            }
+            for item in leftItems { item.tintColor = buttonTintColor }
         }
-
         if let rightItems = navigationItem.rightBarButtonItems {
-            for item in rightItems {
-                item.tintColor = buttonTintColor
-            }
+            for item in rightItems { item.tintColor = buttonTintColor }
         }
 
-        // Create buttonNearDone button with the correct tint color if it doesn't already exist
         if buttonNearDoneIcon != nil &&
             navigationItem.rightBarButtonItems?.count == 1 &&
             navigationItem.rightBarButtonItems?.first == doneBarButtonItem {
 
-            // Create a properly tinted button
             let buttonItem = UIBarButtonItem(image: buttonNearDoneIcon?.withRenderingMode(.alwaysTemplate),
-                                                style: .plain,
-                                                target: self,
-                                                action: #selector(buttonNearDoneDidClick))
+                                             style: .plain,
+                                             target: self,
+                                             action: #selector(buttonNearDoneDidClick))
             buttonItem.tintColor = buttonTintColor
-
-            // Add it to right items
             navigationItem.rightBarButtonItems?.append(buttonItem)
         }
     }
 
     override open func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
-
-        // Update colors when appearance changes
         if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
-            // Update tint colors
             let isDarkMode = traitCollection.userInterfaceStyle == .dark
             let textColor = isDarkMode ? UIColor.white : UIColor.black
-
             if let navBar = navigationController?.navigationBar {
                 if navBar.backgroundColor == UIColor.black || navBar.backgroundColor == UIColor.white {
                     navBar.backgroundColor = isDarkMode ? UIColor.black : UIColor.white
                     navBar.tintColor = textColor
-                    navBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: textColor]
-
-                    // Update all buttons
+                    navBar.titleTextAttributes = [.foregroundColor: textColor]
                     updateButtonTintColors()
                 }
             }
@@ -499,20 +417,17 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         self.credentials = credentials
     }
 
-    // Method to send a message from Swift to JavaScript
+    // MARK: Swift -> JS
     open func postMessageToJS(message: [String: Any]) {
         if let jsonData = try? JSONSerialization.data(withJSONObject: message, options: []),
-            let jsonString = String(data: jsonData, encoding: .utf8) {
+           let jsonString = String(data: jsonData, encoding: .utf8) {
             let script = "window.dispatchEvent(new CustomEvent('messageFromNative', { detail: \(jsonString) }));"
-            DispatchQueue.main.async {
-                self.webView?.evaluateJavaScript(script, completionHandler: nil)
-            }
+            DispatchQueue.main.async { self.webView?.evaluateJavaScript(script, completionHandler: nil) }
         }
     }
 
-    // Method to receive messages from JavaScript
+    // MARK: JS -> Swift
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        // Очищаем очередь сообщений перед обработкой нового
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
@@ -523,18 +438,20 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                 print("[InAppBrowser] Processing close request")
                 self.cleanupWebView()
                 self.closeView()
+
             case "messageHandler":
                 if let messageBody = message.body as? [String: Any] {
                     self.capBrowserPlugin?.notifyListeners("messageFromWebview", data: messageBody)
                 } else {
                     self.capBrowserPlugin?.notifyListeners("messageFromWebview", data: ["rawMessage": String(describing: message.body)])
                 }
+
             case "preShowScriptSuccess":
-                guard let semaphore = preShowSemaphore else { return }
-                semaphore.signal()
+                self.preShowSemaphore?.signal()
+
             case "preShowScriptError":
-                guard let semaphore = preShowSemaphore else { return }
-                semaphore.signal()
+                self.preShowSemaphore?.signal()
+
             case "magicPrint":
                 if let webView = self.webView {
                     let printController = UIPrintInteractionController.shared
@@ -545,6 +462,49 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                     printController.printFormatter = webView.viewPrintFormatter()
                     printController.present(animated: true, completionHandler: nil)
                 }
+
+            // ===== Clipboard =====
+            case "clipboardWrite":
+                if let dict = message.body as? [String: Any],
+                   let text = dict["text"] as? String {
+                    UIPasteboard.general.string = text
+                }
+
+            case "clipboardRead":
+                var id = ""
+                if let dict = message.body as? [String: Any],
+                   let _id = dict["id"] as? String { id = _id }
+                let text = UIPasteboard.general.string ?? ""
+                let escaped = text
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\r", with: "\\r")
+                self.webView?.evaluateJavaScript("window.__clipboardBridgeDeliver(\"\(id)\", \"\(escaped)\");", completionHandler: nil)
+
+            // ===== Vibrate / Haptics =====
+            case "vibrate":
+                func heavyTap() {
+                    if #available(iOS 10.0, *) {
+                        let gen = UIImpactFeedbackGenerator(style: .heavy)
+                        gen.prepare()
+                        gen.impactOccurred()
+                    } else {
+                        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+                    }
+                }
+                if let _ = message.body as? Int {
+                    heavyTap()
+                } else if let arr = message.body as? [Int], !arr.isEmpty {
+                    heavyTap()
+                    if arr.count > 1 {
+                        let delay = max(0, Double(arr[0])) / 1000.0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { heavyTap() }
+                    }
+                } else {
+                    heavyTap()
+                }
+
             default:
                 break
             }
@@ -552,9 +512,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     }
 
     open var backgroundColor: UIColor = .white {
-        didSet {
-            updateBackgroundColor()
-        }
+        didSet { updateBackgroundColor() }
     }
 
     private func updateBackgroundColor() {
@@ -565,25 +523,37 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
     open func initWebview(isInspectable: Bool = true) {
         self.view.backgroundColor = backgroundColor
-
         self.extendedLayoutIncludesOpaqueBars = true
         self.edgesForExtendedLayout = [.bottom]
 
-        // Setup spinner before WebView initialization
         setupSpinner()
 
         let webConfiguration = WKWebViewConfiguration()
         let userContentController = WKUserContentController()
 
-        // Register message handlers
+        // ---- Медиаплейбек / фуллскрин ----
+        webConfiguration.allowsInlineMediaPlayback = true
+        webConfiguration.allowsAirPlayForMediaPlayback = true
+        webConfiguration.allowsPictureInPictureMediaPlayback = true
+        if webConfiguration.responds(to: Selector(("setAllowsFullscreenMediaPlayback:"))) {
+            webConfiguration.setValue(true, forKey: "allowsFullscreenMediaPlayback")
+        }
+        if #available(iOS 10.0, *) {
+            webConfiguration.mediaTypesRequiringUserActionForPlayback = []
+        }
+
+        // ---- Регистрируем message handlers ----
         userContentController.add(self, name: "mobileApp")
         userContentController.add(self, name: "messageHandler")
         userContentController.add(self, name: "preShowScriptError")
         userContentController.add(self, name: "preShowScriptSuccess")
         userContentController.add(self, name: "close")
         userContentController.add(self, name: "magicPrint")
+        userContentController.add(self, name: "clipboardWrite")
+        userContentController.add(self, name: "clipboardRead")
+        userContentController.add(self, name: "vibrate")
 
-        // Inject JavaScript bridge
+        // ---- JS мост ----
         let bridgeScript = """
             window.mobileApp = {
                 postMessage: function(message) {
@@ -598,36 +568,87 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                 }
             };
         """
+        userContentController.addUserScript(WKUserScript(source: bridgeScript, injectionTime: .atDocumentStart, forMainFrameOnly: false))
 
-        let userScript = WKUserScript(
-            source: bridgeScript,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
-        )
-        userContentController.addUserScript(userScript)
-
-        // Inject print override script
+        // ---- print override ----
         let printScript = WKUserScript(
-            source: """
-            window.print = function() {
-                window.webkit.messageHandlers.magicPrint.postMessage('magicPrint');
-            };
-            """,
+            source: "window.print = function(){ window.webkit.messageHandlers.magicPrint.postMessage('magicPrint'); };",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         )
         userContentController.addUserScript(printScript)
 
-        webConfiguration.allowsInlineMediaPlayback = true
+        // ---- Полифиллы: Clipboard / Vibrate / Video Fullscreen ----
+        let bridgePolyfills = """
+        (function(){
+          // Clipboard
+          (function(){
+            if (!window.__clipboardBridgeDeliver) {
+              window.__clipboardBridgeDeliver = function(id, text){
+                try {
+                  var p = (window.__clipboardPending || {})[id];
+                  if (p) { p.resolve(text || ""); delete window.__clipboardPending[id]; }
+                } catch(e){}
+              };
+            }
+            window.__clipboardPending = window.__clipboardPending || {};
+            var __id = 0;
+            if (!navigator.clipboard) navigator.clipboard = {};
+            // перезаписываем/дополняем, чтобы точно работало внутри WKWebView
+            navigator.clipboard.writeText = function(text){
+              try {
+                window.webkit.messageHandlers.clipboardWrite.postMessage({ text: String(text ?? "") });
+                return Promise.resolve();
+              } catch(e) { return Promise.reject(e); }
+            };
+            navigator.clipboard.readText = function(){
+              return new Promise(function(resolve){
+                var id = "c" + (__id++);
+                window.__clipboardPending[id] = { resolve: resolve };
+                try {
+                  window.webkit.messageHandlers.clipboardRead.postMessage({ id: id });
+                } catch(e) { resolve(""); }
+              });
+            };
+          })();
+
+          // Vibrate
+          (function(){
+            navigator.vibrate = function(pattern){
+              try {
+                window.webkit.messageHandlers.vibrate.postMessage(pattern ?? 50);
+                return true;
+              } catch(e){ return false; }
+            };
+          })();
+
+          // Video fullscreen helper (requestFullscreen на <video>)
+          (function(){
+            if (typeof HTMLVideoElement !== "undefined") {
+              var proto = HTMLVideoElement.prototype;
+              if (!proto.requestFullscreen && (proto.webkitEnterFullscreen || proto.webkitRequestFullscreen)) {
+                proto.requestFullscreen = proto.webkitEnterFullscreen || proto.webkitRequestFullscreen;
+              }
+              document.addEventListener("click", function(e){
+                var v = e.target && e.target.closest && e.target.closest("video");
+                if (v) {
+                  v.setAttribute("playsinline", "");
+                  v.setAttribute("webkit-playsinline", "");
+                }
+              }, {capture:true, passive:true});
+            }
+          })();
+        })();
+        """
+        userContentController.addUserScript(WKUserScript(source: bridgePolyfills, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+
         webConfiguration.userContentController = userContentController
 
         let webView = WKWebView(frame: .zero, configuration: webConfiguration)
         webView.backgroundColor = backgroundColor
         webView.isOpaque = false
 
-        if #available(iOS 16.4, *) {
-            webView.isInspectable = true
-        }
+        if #available(iOS 16.4, *) { webView.isInspectable = true }
 
         webView.uiDelegate = self
         webView.navigationDelegate = self
@@ -643,7 +664,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
 
         if !self.blankNavigationTab {
             self.view = webView
-            // Re-add spinner after setting WebView as main view
             setupSpinner()
         } else {
             self.view.addSubview(webView)
@@ -654,10 +674,8 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                 webView.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
                 webView.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)
             ])
-            // Re-add spinner after adding WebView
             setupSpinner()
         }
-
 
         self.webView = webView
         self.webView?.customUserAgent = self.customUserAgent ?? self.userAgent ?? self.originalUserAgent
@@ -668,9 +686,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             self.previousToolbarState = (navigation.toolbar.tintColor, navigation.toolbar.isHidden)
         }
 
-        if let s = self.source {
-            self.load(source: s)
-        }
+        if let s = self.source { self.load(source: s) }
     }
 
     open func setupViewElements() {
@@ -690,7 +706,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             topPadding = window?.safeAreaInsets.top ?? 0.0
         }
         if UIDevice.current.orientation.isPortrait {
-            // Don't force toolbar visibility
             if self.viewHeightPortrait == nil {
                 self.viewHeightPortrait = self.view.safeAreaLayoutGuide.layoutFrame.size.height
                 self.viewHeightPortrait! += bottomPadding
@@ -700,7 +715,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             }
             self.currentViewHeight = self.viewHeightPortrait
         } else if UIDevice.current.orientation.isLandscape {
-            // Don't force toolbar visibility
             if self.viewHeightLandscape == nil {
                 self.viewHeightLandscape = self.view.safeAreaLayoutGuide.layoutFrame.size.height
                 self.viewHeightLandscape! += bottomPadding
@@ -712,9 +726,7 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         }
     }
 
-    override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
-        //        self.view.frame.size.height = self.currentViewHeight!
-    }
+    override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {}
 
     override open func viewWillLayoutSubviews() {
         restateViewHeight()
@@ -730,28 +742,19 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
             setUpState()
             self.viewWasPresented = true
         }
-
-        // Force update button appearances
         updateButtonTintColors()
 
-        // Ensure status bar appearance is correct when view appears
-        // Make sure we have the latest tint color
         if self.tintColor != nil {
-            // Update the status bar background if needed
             if let navController = navigationController, let backgroundColor = navController.navigationBar.backgroundColor ?? statusBarBackgroundView?.backgroundColor {
                 setupStatusBarBackground(color: backgroundColor)
             } else {
                 setupStatusBarBackground(color: UIColor.white)
             }
         }
-
-        // Update status bar style
         updateStatusBarStyle()
 
-        // Special handling for blank toolbar mode
         if blankNavigationTab && statusBarBackgroundView != nil {
             if let color = statusBarBackgroundView?.backgroundColor {
-                // Set view color to match status bar
                 view.backgroundColor = color
             }
         }
@@ -760,28 +763,21 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
     override open func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
-        // Force add buttonNearDone if it's not visible yet
         if buttonNearDoneIcon != nil {
-            // Check if button already exists in the navigation bar
             let buttonExists = navigationItem.rightBarButtonItems?.contains { item in
                 return item.action == #selector(buttonNearDoneDidClick)
             } ?? false
 
             if !buttonExists {
-                // Create and add the button directly
                 let buttonItem = UIBarButtonItem(
                     image: buttonNearDoneIcon?.withRenderingMode(.alwaysTemplate),
                     style: .plain,
                     target: self,
                     action: #selector(buttonNearDoneDidClick)
                 )
-
-                // Apply tint color
                 if let tintColor = self.tintColor ?? self.navigationController?.navigationBar.tintColor {
                     buttonItem.tintColor = tintColor
                 }
-
-                // Add to right items
                 if navigationItem.rightBarButtonItems == nil {
                     navigationItem.rightBarButtonItems = [buttonItem]
                 } else {
@@ -789,7 +785,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                     items.append(buttonItem)
                     navigationItem.rightBarButtonItems = items
                 }
-
                 print("[DEBUG] Force added buttonNearDone in viewDidAppear")
             }
         }
@@ -804,17 +799,13 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
         switch keyPath {
         case estimatedProgressKeyPath?:
             DispatchQueue.main.async {
-                guard let estimatedProgress = self.webView?.estimatedProgress else {
-                    return
-                }
+                guard let estimatedProgress = self.webView?.estimatedProgress else { return }
                 self.progressView?.alpha = 1
                 self.progressView?.setProgress(Float(estimatedProgress), animated: true)
-
                 if estimatedProgress >= 1.0 {
                     UIView.animate(withDuration: 0.3, delay: 0.3, options: .curveEaseOut, animations: {
                         self.progressView?.alpha = 0
-                    }, completion: {
-                        _ in
+                    }, completion: { _ in
                         self.progressView?.setProgress(0, animated: false)
                     })
                 }
@@ -824,7 +815,6 @@ open class WKWebViewController: UIViewController, WKScriptMessageHandler {
                 self.navigationItem.title = webView?.url?.host
             }
         case "URL":
-
             self.capBrowserPlugin?.notifyListeners("urlChangeEvent", data: ["url": webView?.url?.absoluteString ?? ""])
         default:
             super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
@@ -880,7 +870,6 @@ public extension WKWebViewController {
         document.getElementsByTagName('body')[0].style.webkitTextSizeAdjust = '\(zoomPercent)%';
         document.getElementsByTagName('body')[0].style.textSizeAdjust = '\(zoomPercent)%';
         """
-
         executeScript(script: script)
     }
 }
@@ -888,35 +877,22 @@ public extension WKWebViewController {
 // MARK: - Fileprivate Methods
 fileprivate extension WKWebViewController {
     var availableCookies: [HTTPCookie]? {
-        return cookies?.filter {
-            cookie in
+        return cookies?.filter { cookie in
             var result = true
             let url = self.source?.remoteURL
-            if let host = url?.host, !cookie.domain.hasSuffix(host) {
-                result = false
-            }
-            if cookie.isSecure && url?.scheme != "https" {
-                result = false
-            }
-
+            if let host = url?.host, !cookie.domain.hasSuffix(host) { result = false }
+            if cookie.isSecure && url?.scheme != "https" { result = false }
             return result
         }
     }
     func createRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
-
-        // Set up headers
         if let headers = headers {
-            for (field, value) in headers {
-                request.addValue(value, forHTTPHeaderField: field)
-            }
+            for (field, value) in headers { request.addValue(value, forHTTPHeaderField: field) }
         }
-
-        // Set up Cookies
         if let cookies = availableCookies, let value = HTTPCookie.requestHeaderFields(with: cookies)[cookieKey] {
             request.addValue(value, forHTTPHeaderField: cookieKey)
         }
-
         return request
     }
 
@@ -924,7 +900,6 @@ fileprivate extension WKWebViewController {
         let progressView = UIProgressView(progressViewStyle: .default)
         progressView.trackTintColor = UIColor(white: 1, alpha: 0)
         self.progressView = progressView
-        //        updateProgressViewFrame()
     }
 
     func setUpConstraints() {
@@ -938,20 +913,13 @@ fileprivate extension WKWebViewController {
     func addBarButtonItems() {
         func barButtonItem(_ type: BarButtonItemType) -> UIBarButtonItem? {
             switch type {
-            case .back:
-                return backBarButtonItem
-            case .forward:
-                return forwardBarButtonItem
-            case .reload:
-                return reloadBarButtonItem
-            case .stop:
-                return stopBarButtonItem
-            case .activity:
-                return activityBarButtonItem
-            case .done:
-                return doneBarButtonItem
-            case .flexibleSpace:
-                return flexibleSpaceBarButtonItem
+            case .back: return backBarButtonItem
+            case .forward: return forwardBarButtonItem
+            case .reload: return reloadBarButtonItem
+            case .stop: return stopBarButtonItem
+            case .activity: return activityBarButtonItem
+            case .done: return doneBarButtonItem
+            case .flexibleSpace: return flexibleSpaceBarButtonItem
             case .custom(let icon, let title, let action):
                 let item: BlockBarButtonItem
                 if let icon = icon {
@@ -966,81 +934,45 @@ fileprivate extension WKWebViewController {
 
         switch doneBarButtonItemPosition {
         case .left:
-            if !leftNavigationBarItemTypes.contains(where: { type in
-                switch type {
-                case .done:
-                    return true
-                default:
-                    return false
-                }
-            }) {
+            if !leftNavigationBarItemTypes.contains(where: { if case .done = $0 { return true } else { return false } }) {
                 leftNavigationBarItemTypes.insert(.done, at: 0)
             }
         case .right:
-            if !rightNavigaionBarItemTypes.contains(where: { type in
-                switch type {
-                case .done:
-                    return true
-                default:
-                    return false
-                }
-            }) {
+            if !rightNavigaionBarItemTypes.contains(where: { if case .done = $0 { return true } else { return false } }) {
                 rightNavigaionBarItemTypes.insert(.done, at: 0)
             }
         case .none:
             break
         }
 
-        navigationItem.leftBarButtonItems = leftNavigationBarItemTypes.map {
-            barButtonItemType in
-            if let barButtonItem = barButtonItem(barButtonItemType) {
-                return barButtonItem
-            }
-            return UIBarButtonItem()
-        }
+        navigationItem.leftBarButtonItems = leftNavigationBarItemTypes.map { barButtonItem($0) ?? UIBarButtonItem() }
 
-        var rightBarButtons = rightNavigaionBarItemTypes.map {
-            barButtonItemType in
-            if let barButtonItem = barButtonItem(barButtonItemType) {
-                return barButtonItem
-            }
-            return UIBarButtonItem()
-        }
+        var rightBarButtons = rightNavigaionBarItemTypes.map { barButtonItem($0) ?? UIBarButtonItem() }
 
-        // If we have buttonNearDoneIcon and the first (or only) right button is the done button
         if buttonNearDoneIcon != nil &&
             ((rightBarButtons.count == 1 && rightBarButtons[0] == doneBarButtonItem) ||
-                (rightBarButtons.isEmpty && doneBarButtonItemPosition == .right) ||
-                rightBarButtons.contains(doneBarButtonItem)) {
+             (rightBarButtons.isEmpty && doneBarButtonItemPosition == .right) ||
+             rightBarButtons.contains(doneBarButtonItem)) {
 
-            // Check if button already exists to avoid duplicates
             let buttonExists = rightBarButtons.contains { item in
                 let selector = #selector(buttonNearDoneDidClick)
                 return item.action == selector
             }
 
             if !buttonExists {
-                // Create button with proper tint and template rendering mode
                 let buttonItem = UIBarButtonItem(
                     image: buttonNearDoneIcon?.withRenderingMode(.alwaysTemplate),
                     style: .plain,
                     target: self,
                     action: #selector(buttonNearDoneDidClick)
                 )
-
-                // Apply tint from navigation bar or from tintColor property
                 if let tintColor = self.tintColor ?? self.navigationController?.navigationBar.tintColor {
                     buttonItem.tintColor = tintColor
                 }
-
-                // Make sure the done button is there before adding this one
                 if rightBarButtons.isEmpty && doneBarButtonItemPosition == .right {
                     rightBarButtons.append(doneBarButtonItem)
                 }
-
-                // Add the button
                 rightBarButtons.append(buttonItem)
-
                 print("[DEBUG] Added buttonNearDone to right bar buttons, icon: \(String(describing: buttonNearDoneIcon))")
             } else {
                 print("[DEBUG] buttonNearDone already exists in right bar buttons")
@@ -1048,53 +980,33 @@ fileprivate extension WKWebViewController {
         }
 
         navigationItem.rightBarButtonItems = rightBarButtons
-
-        // After all buttons are set up, apply tint color
         updateButtonTintColors()
     }
 
     func updateBarButtonItems() {
-        // Update navigation buttons (completely separate from close button)
         backBarButtonItem.isEnabled = webView?.canGoBack ?? false
         forwardBarButtonItem.isEnabled = webView?.canGoForward ?? false
 
-        let updateReloadBarButtonItem: (UIBarButtonItem, Bool) -> UIBarButtonItem = {
-            [unowned self] barButtonItem, isLoading in
+        let updateReloadBarButtonItem: (UIBarButtonItem, Bool) -> UIBarButtonItem = { [unowned self] barButtonItem, isLoading in
             switch barButtonItem {
-            case self.reloadBarButtonItem:
-                fallthrough
-            case self.stopBarButtonItem:
-                return isLoading ? self.stopBarButtonItem : self.reloadBarButtonItem
-            default:
-                break
+            case self.reloadBarButtonItem: fallthrough
+            case self.stopBarButtonItem: return isLoading ? self.stopBarButtonItem : self.reloadBarButtonItem
+            default: break
             }
             return barButtonItem
         }
 
         let isLoading = webView?.isLoading ?? false
-        navigationItem.leftBarButtonItems = navigationItem.leftBarButtonItems?.map {
-            barButtonItem -> UIBarButtonItem in
-            return updateReloadBarButtonItem(barButtonItem, isLoading)
-        }
-
-        navigationItem.rightBarButtonItems = navigationItem.rightBarButtonItems?.map {
-            barButtonItem -> UIBarButtonItem in
-            return updateReloadBarButtonItem(barButtonItem, isLoading)
-        }
+        navigationItem.leftBarButtonItems = navigationItem.leftBarButtonItems?.map { updateReloadBarButtonItem($0, isLoading) }
+        navigationItem.rightBarButtonItems = navigationItem.rightBarButtonItems?.map { updateReloadBarButtonItem($0, isLoading) }
     }
 
     func setUpState() {
         navigationController?.setNavigationBarHidden(false, animated: true)
-
-        // Always hide toolbar since we never want it
         navigationController?.setToolbarHidden(true, animated: true)
-
-        // Set tint colors but don't override specific colors
         if tintColor == nil {
-            // Use system appearance if no specific tint color is set
             let isDarkMode = traitCollection.userInterfaceStyle == .dark
             let textColor = isDarkMode ? UIColor.white : UIColor.black
-
             navigationController?.navigationBar.tintColor = textColor
             progressView?.progressTintColor = textColor
         } else {
@@ -1105,32 +1017,22 @@ fileprivate extension WKWebViewController {
 
     func rollbackState() {
         progressView?.progress = 0
-
         navigationController?.navigationBar.tintColor = previousNavigationBarState.tintColor
-
         navigationController?.setNavigationBarHidden(previousNavigationBarState.hidden, animated: true)
     }
 
     func checkRequestCookies(_ request: URLRequest, cookies: [HTTPCookie]) -> Bool {
-        if cookies.count <= 0 {
-            return true
-        }
+        if cookies.count <= 0 { return true }
         guard let headerFields = request.allHTTPHeaderFields, let cookieString = headerFields[cookieKey] else {
             return false
         }
-
         let requestCookies = cookieString.components(separatedBy: ";").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: "=", maxSplits: 1).map(String.init)
         }
-
         var valid = false
         for cookie in cookies {
-            valid = requestCookies.filter {
-                $0[0] == cookie.name && $0[1] == cookie.value
-            }.count > 0
-            if !valid {
-                break
-            }
+            valid = requestCookies.filter { $0[0] == cookie.name && $0[1] == cookie.value }.count > 0
+            if !valid { break }
         }
         return valid
     }
@@ -1141,15 +1043,11 @@ fileprivate extension WKWebViewController {
             application.open(url, options: [:], completionHandler: nil)
             return true
         }
-
         return false
     }
 
     func handleURLWithApp(_ url: URL, targetFrame: WKFrameInfo?) -> Bool {
-        // If preventDeeplink is true, don't try to open URLs in external apps
-        if self.preventDeeplink {
-            return false
-        }
+        if self.preventDeeplink { return false }
 
         let hosts = UrlsHandledByApp.hosts
         let schemes = UrlsHandledByApp.schemes
@@ -1157,111 +1055,63 @@ fileprivate extension WKWebViewController {
 
         var tryToOpenURLWithApp = false
 
-        // Handle all non-http(s) schemes by default
         if let scheme = url.scheme?.lowercased(), !scheme.hasPrefix("http") {
             tryToOpenURLWithApp = true
         }
-
-        // Also handle specific hosts and schemes from UrlsHandledByApp
-        if let host = url.host, hosts.contains(host) {
-            tryToOpenURLWithApp = true
-        }
-        if let scheme = url.scheme, schemes.contains(scheme) {
-            tryToOpenURLWithApp = true
-        }
-        if blank && targetFrame == nil {
-            tryToOpenURLWithApp = true
-        }
+        if let host = url.host, hosts.contains(host) { tryToOpenURLWithApp = true }
+        if let scheme = url.scheme, schemes.contains(scheme) { tryToOpenURLWithApp = true }
+        if blank && targetFrame == nil { tryToOpenURLWithApp = true }
 
         return tryToOpenURLWithApp ? openURLWithApp(url) : false
     }
 
     @objc func backDidClick(sender: AnyObject) {
-        // Only handle back navigation, not closing
-        if webView?.canGoBack ?? false {
-            webView?.goBack()
-        }
+        if webView?.canGoBack ?? false { webView?.goBack() }
     }
-
-    @objc func forwardDidClick(sender: AnyObject) {
-        webView?.goForward()
-    }
-
-    @objc func buttonNearDoneDidClick(sender: AnyObject) {
-        self.capBrowserPlugin?.notifyListeners("buttonNearDoneClick", data: [:])
-    }
+    @objc func forwardDidClick(sender: AnyObject) { webView?.goForward() }
+    @objc func buttonNearDoneDidClick(sender: AnyObject) { self.capBrowserPlugin?.notifyListeners("buttonNearDoneClick", data: [:]) }
 
     @objc func reloadDidClick(sender: AnyObject) {
         webView?.stopLoading()
-        if webView?.url != nil {
-            webView?.reload()
-        } else if let s = self.source {
-            self.load(source: s)
-        }
+        if webView?.url != nil { webView?.reload() }
+        else if let s = self.source { self.load(source: s) }
     }
 
-    @objc func stopDidClick(sender: AnyObject) {
-        webView?.stopLoading()
-    }
+    @objc func stopDidClick(sender: AnyObject) { webView?.stopLoading() }
 
     @objc func activityDidClick(sender: AnyObject) {
         print("[DEBUG] Activity button clicked, shareSubject: \(self.shareSubject ?? "nil")")
-
         guard let s = self.source else {
             print("[DEBUG] Activity button: No source available")
             return
         }
-
         let items: [Any]
         switch s {
-        case .remote(let u):
-            items = [u]
-        case .file(let u, access: _):
-            items = [u]
-        case .string(let str, base: _):
-            items = [str]
+        case .remote(let u): items = [u]
+        case .file(let u, access: _): items = [u]
+        case .string(let str, base: _): items = [str]
         }
         showDisclaimer(items: items, sender: sender)
     }
 
     func showDisclaimer(items: [Any], sender: AnyObject) {
-        // Show disclaimer dialog before sharing if shareDisclaimer is set
         if let disclaimer = self.shareDisclaimer, !disclaimer.isEmpty {
-            // Create and show the alert
             let alert = UIAlertController(
                 title: disclaimer["title"] as? String ?? "Title",
                 message: disclaimer["message"] as? String ?? "Message",
-                preferredStyle: UIAlertController.Style.alert)
-
-            // Add confirm button that continues with sharing
-            alert.addAction(UIAlertAction(
-                title: disclaimer["confirmBtn"] as? String ?? "Confirm",
-                style: UIAlertAction.Style.default,
-                handler: { _ in
-                    // Notify that confirm was clicked
-                    self.capBrowserPlugin?.notifyListeners("confirmBtnClicked", data: nil)
-
-                    // Show the share dialog
-                    self.showShareSheet(items: items, sender: sender)
-                }
-            ))
-
-            // Add cancel button
-            alert.addAction(UIAlertAction(
-                title: disclaimer["cancelBtn"] as? String ?? "Cancel",
-                style: UIAlertAction.Style.cancel,
-                handler: nil
-            ))
-
-            // Present the alert
+                preferredStyle: .alert
+            )
+            alert.addAction(UIAlertAction(title: disclaimer["confirmBtn"] as? String ?? "Confirm", style: .default, handler: { _ in
+                self.capBrowserPlugin?.notifyListeners("confirmBtnClicked", data: nil)
+                self.showShareSheet(items: items, sender: sender)
+            }))
+            alert.addAction(UIAlertAction(title: disclaimer["cancelBtn"] as? String ?? "Cancel", style: .cancel))
             self.present(alert, animated: true, completion: nil)
         } else {
-            // No disclaimer, directly show share sheet
             showShareSheet(items: items, sender: sender)
         }
     }
 
-    // Separated the actual sharing functionality
     private func showShareSheet(items: [Any], sender: AnyObject) {
         let activityViewController = UIActivityViewController(activityItems: items, applicationActivities: nil)
         activityViewController.setValue(self.shareSubject ?? self.title, forKey: "subject")
@@ -1272,28 +1122,17 @@ fileprivate extension WKWebViewController {
     public func closeView() {
         print("[InAppBrowser] Starting closeView")
 
-        // Проверяем, можно ли закрыть view
         var canDismiss = true
         if let url = self.source?.url {
             canDismiss = delegate?.webViewController?(self, canDismiss: url) ?? true
         }
-
         if canDismiss {
             print("[InAppBrowser] Proceeding with dismissal")
-
-            // Сохраняем URL перед очисткой
             let currentUrl = webView?.url?.absoluteString ?? ""
-
-            // Сначала уведомляем о закрытии
             self.capBrowserPlugin?.notifyListeners("closeEvent", data: ["url": currentUrl])
-
-            // Затем очищаем WebView
             cleanupWebView()
-
-            // И наконец закрываем view controller
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-
                 if let presentingViewController = self.presentingViewController {
                     print("[InAppBrowser] Dismissing from presenting view controller")
                     presentingViewController.dismiss(animated: true, completion: nil)
@@ -1310,23 +1149,19 @@ fileprivate extension WKWebViewController {
     }
 
     @objc func doneDidClick(sender: AnyObject) {
-        // check if closeModal is true, if true display alert before close
         if self.closeModal {
-            let alert = UIAlertController(title: self.closeModalTitle, message: self.closeModalDescription, preferredStyle: UIAlertController.Style.alert)
-            alert.addAction(UIAlertAction(title: self.closeModalOk, style: UIAlertAction.Style.default, handler: { _ in
+            let alert = UIAlertController(title: self.closeModalTitle, message: self.closeModalDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: self.closeModalOk, style: .default, handler: { _ in
                 self.closeView()
             }))
-            alert.addAction(UIAlertAction(title: self.closeModalCancel, style: UIAlertAction.Style.default, handler: nil))
+            alert.addAction(UIAlertAction(title: self.closeModalCancel, style: .default))
             self.present(alert, animated: true, completion: nil)
         } else {
             self.closeView()
         }
-
     }
 
-    @objc func customDidClick(sender: BlockBarButtonItem) {
-        sender.block?(self)
-    }
+    @objc func customDidClick(sender: BlockBarButtonItem) { sender.block?(self) }
 
     func canRotate() {}
 
@@ -1337,65 +1172,53 @@ fileprivate extension WKWebViewController {
     }
 
     func setUpNavigationBarAppearance() {
-        // Set up basic bar appearance
         if let navBar = navigationController?.navigationBar {
-            // Make navigation bar transparent
             navBar.setBackgroundImage(UIImage(), for: .default)
             navBar.shadowImage = UIImage()
             navBar.isTranslucent = true
-
-            // Set tint color based on background color
             let buttonTintColor = backgroundColor == .white ? UIColor.black : (tintColor ?? .white)
             navBar.tintColor = buttonTintColor
-
-            // Ensure text colors are set
             navBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: buttonTintColor]
-
-            // Ensure the navigation bar buttons are properly visible
             for item in navBar.items ?? [] {
                 for barButton in (item.leftBarButtonItems ?? []) + (item.rightBarButtonItems ?? []) {
                     barButton.tintColor = buttonTintColor
                 }
             }
         }
-
-        // Force button colors to update
         updateButtonTintColors()
     }
 
     private func cleanupWebView() {
         print("[InAppBrowser] Starting cleanup")
-
-        // Проверяем, что webView существует
         guard let webView = self.webView else {
             print("[InAppBrowser] WebView is already nil during cleanup")
             return
         }
-
-        // Останавливаем загрузку
         webView.stopLoading()
 
-        // Удаляем наблюдатели
         webView.removeObserver(self, forKeyPath: estimatedProgressKeyPath)
         if websiteTitleInNavigationBar {
             webView.removeObserver(self, forKeyPath: titleKeyPath)
         }
         webView.removeObserver(self, forKeyPath: #keyPath(WKWebView.url))
 
-        // Очищаем все скрипты и обработчики
-        webView.configuration.userContentController.removeAllUserScripts()
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "messageHandler")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "close")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "preShowScriptSuccess")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "preShowScriptError")
+        // Снимаем все user scripts и handlers, включая добавленные для Clipboard/Vibrate
+        let ucc = webView.configuration.userContentController
+        ucc.removeAllUserScripts()
+        ucc.removeScriptMessageHandler(forName: "messageHandler")
+        ucc.removeScriptMessageHandler(forName: "close")
+        ucc.removeScriptMessageHandler(forName: "preShowScriptSuccess")
+        ucc.removeScriptMessageHandler(forName: "preShowScriptError")
+        ucc.removeScriptMessageHandler(forName: "magicPrint")
+        ucc.removeScriptMessageHandler(forName: "clipboardWrite")
+        ucc.removeScriptMessageHandler(forName: "clipboardRead")
+        ucc.removeScriptMessageHandler(forName: "vibrate")
 
-        // Очищаем кэш и данные
         WKWebsiteDataStore.default().removeData(
             ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
             modifiedSince: Date(timeIntervalSince1970: 0)
         ) { [weak self] in
             print("[InAppBrowser] Cache cleared")
-            // Очищаем ссылку на webView только после завершения всех операций
             self?.webView = nil
         }
     }
@@ -1404,12 +1227,9 @@ fileprivate extension WKWebViewController {
 // MARK: - WKUIDelegate
 extension WKWebViewController: WKUIDelegate {
     public func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-        // Ensure UI updates are on the main thread
         DispatchQueue.main.async {
             let alertController = UIAlertController(title: nil, message: message, preferredStyle: .alert)
-            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in
-                completionHandler()
-            }))
+            alertController.addAction(UIAlertAction(title: "OK", style: .default, handler: { _ in completionHandler() }))
             self.present(alertController, animated: true, completion: nil)
         }
     }
@@ -1423,15 +1243,8 @@ extension WKWebViewController: WKUIDelegate {
                     message: "Приложению требуется доступ к камере. Разрешить?",
                     preferredStyle: .alert
                 )
-
-                alertController.addAction(UIAlertAction(title: "Разрешить", style: .default) { _ in
-                    decisionHandler(true)
-                })
-
-                alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel) { _ in
-                    decisionHandler(false)
-                })
-
+                alertController.addAction(UIAlertAction(title: "Разрешить", style: .default) { _ in decisionHandler(true) })
+                alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel) { _ in decisionHandler(false) })
                 self.present(alertController, animated: true)
             }
         } else {
@@ -1443,44 +1256,28 @@ extension WKWebViewController: WKUIDelegate {
 // MARK: - WKNavigationDelegate
 extension WKWebViewController: WKNavigationDelegate {
     internal func injectPreShowScript() {
-        if preShowSemaphore != nil {
-            return
-        }
-
-        // TODO: implement interface
+        if preShowSemaphore != nil { return }
         let script = """
-                        async function preShowFunction() {
-                        \(self.preShowScript ?? "")
-                        };
-                        preShowFunction().then(
-                                () => window.webkit.messageHandlers.preShowScriptSuccess.postMessage({})
-                        ).catch(
-                                err => {
-                                        console.error('Preshow error', err);
-                                        window.webkit.messageHandlers.preShowScriptError.postMessage(JSON.stringify(err, Object.getOwnPropertyNames(err)));
-                                }
-                        )
-                        """
+        async function preShowFunction() {
+        \(self.preShowScript ?? "")
+        };
+        preShowFunction().then(
+                () => window.webkit.messageHandlers.preShowScriptSuccess.postMessage({})
+        ).catch(
+                err => {
+                        console.error('Preshow error', err);
+                        window.webkit.messageHandlers.preShowScriptError.postMessage(JSON.stringify(err, Object.getOwnPropertyNames(err)));
+                }
+        )
+        """
         print("[InAppBrowser - InjectPreShowScript] PreShowScript script: \(script)")
-
         self.preShowSemaphore = DispatchSemaphore(value: 0)
-        self.executeScript(script: script) // this will run on the main thread
-
+        self.executeScript(script: script)
         defer {
             self.preShowSemaphore = nil
             self.preShowError = nil
         }
-
-        if self.preShowSemaphore?.wait(timeout: .now() + 10) == .timedOut {
-            print("[InAppBrowser - InjectPreShowScript] PreShowScript running for over 10 seconds. The plugin will not wait any longer!")
-            return
-        }
-
-        //            "async function preShowFunction() {\n" +
-        //            self.preShowScript + "\n" +
-        //            "};\n" +
-        //            "preShowFunction().then(() => window.PreShowScriptInterface.success()).catch(err => { console.error('Preshow error', err); window.PreShowScriptInterface.error(JSON.stringify(err, Object.getOwnPropertyNames(err))) })";
-
+        _ = self.preShowSemaphore?.wait(timeout: .now() + 10)
     }
 
     public func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -1490,35 +1287,26 @@ extension WKWebViewController: WKNavigationDelegate {
             self.url = u
             delegate?.webViewController?(self, didStart: u)
         }
-        // Start spinner
         loadingSpinner?.startAnimating()
     }
+
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Stop spinner
         loadingSpinner?.stopAnimating()
 
         if !didpageInit && self.capBrowserPlugin?.isPresentAfterPageLoad == true {
-            // injectPreShowScript will block, don't execute on the main thread
             if self.preShowScript != nil && !self.preShowScript!.isEmpty {
                 DispatchQueue.global(qos: .userInitiated).async {
                     self.injectPreShowScript()
-                    DispatchQueue.main.async { [weak self] in
-                        self?.capBrowserPlugin?.presentView()
-                    }
+                    DispatchQueue.main.async { [weak self] in self?.capBrowserPlugin?.presentView() }
                 }
             } else {
                 self.capBrowserPlugin?.presentView()
             }
         } else if self.preShowScript != nil && !self.preShowScript!.isEmpty && self.capBrowserPlugin?.isPresentAfterPageLoad == true {
-            DispatchQueue.global(qos: .userInitiated).async {
-                self.injectPreShowScript()
-            }
+            DispatchQueue.global(qos: .userInitiated).async { self.injectPreShowScript() }
         }
 
-        // Apply text zoom if set
-        if let zoom = self.textZoom {
-            applyTextZoom(zoom)
-        }
+        if let zoom = self.textZoom { applyTextZoom(zoom) }
 
         didpageInit = true
         updateBarButtonItems()
@@ -1529,37 +1317,25 @@ extension WKWebViewController: WKNavigationDelegate {
         }
         self.capBrowserPlugin?.notifyListeners("browserPageLoaded", data: [:])
 
-        // Handle permissions
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-
             for permission in self.permissions {
                 switch permission {
-                case "camera":
-                    self.handleCameraPermission()
-                case "microphone":
-                    self.handleMicrophonePermission()
-                case "location":
-                    self.handleLocationPermission()
-                case "notifications":
-                    self.handleNotificationPermission()
-                case "contacts":
-                    self.handleContactsPermission()
-                case "calendar":
-                    self.handleCalendarPermission()
-                case "gallery":
-                    self.handleGalleryPermission()
-                default:
-                    break
+                case "camera": self.handleCameraPermission()
+                case "microphone": self.handleMicrophonePermission()
+                case "location": self.handleLocationPermission()
+                case "notifications": self.handleNotificationPermission()
+                case "contacts": self.handleContactsPermission()
+                case "calendar": self.handleCalendarPermission()
+                case "gallery": self.handleGalleryPermission()
+                default: break
                 }
             }
         }
     }
 
     public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        // Stop spinner on error
         loadingSpinner?.stopAnimating()
-
         updateBarButtonItems()
         self.progressView?.progress = 0
         if let url = webView.url {
@@ -1570,9 +1346,7 @@ extension WKWebViewController: WKNavigationDelegate {
     }
 
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        // Stop spinner on error
         loadingSpinner?.stopAnimating()
-
         updateBarButtonItems()
         self.progressView?.progress = 0
         if let url = webView.url {
@@ -1584,8 +1358,8 @@ extension WKWebViewController: WKNavigationDelegate {
 
     public func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         if let credentials = credentials,
-            challenge.protectionSpace.receivesCredentialSecurely,
-            let url = webView.url, challenge.protectionSpace.host == url.host, challenge.protectionSpace.protocol == url.scheme, challenge.protectionSpace.port == url.port ?? (url.scheme == "https" ? 443 : url.scheme == "http" ? 80 : nil) {
+           challenge.protectionSpace.receivesCredentialSecurely,
+           let url = webView.url, challenge.protectionSpace.host == url.host, challenge.protectionSpace.protocol == url.scheme, challenge.protectionSpace.port == url.port ?? (url.scheme == "https" ? 443 : url.scheme == "http" ? 80 : nil) {
             let urlCredential = URLCredential(user: credentials.username, password: credentials.password, persistence: .none)
             completionHandler(.useCredential, urlCredential)
         } else if let bypassedSSLHosts = bypassedSSLHosts, bypassedSSLHosts.contains(challenge.protectionSpace.host) {
@@ -1596,9 +1370,6 @@ extension WKWebViewController: WKNavigationDelegate {
                 completionHandler(.performDefaultHandling, nil)
                 return
             }
-            /* allows to open links with self-signed certificates
-                Follow Apple's guidelines https://developer.apple.com/documentation/foundation/url_loading_system/handling_an_authentication_challenge/performing_manual_server_trust_authentication
-                */
             guard let serverTrust = challenge.protectionSpace.serverTrust  else {
                 completionHandler(.useCredential, nil)
                 return
@@ -1610,29 +1381,21 @@ extension WKWebViewController: WKNavigationDelegate {
 
     public func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         var actionPolicy: WKNavigationActionPolicy = .allow
-
-        if self.preventDeeplink {
-            actionPolicy = .preventDeeplinkActionPolicy
-        }
+        if self.preventDeeplink { actionPolicy = .preventDeeplinkActionPolicy }
 
         guard let u = navigationAction.request.url else {
-            decisionHandler(actionPolicy)
-            return
+            decisionHandler(actionPolicy); return
         }
 
-        // Проверяем URL на наличие параметра exit
         if let components = URLComponents(url: u, resolvingAgainstBaseURL: false),
            let queryItems = components.queryItems,
            queryItems.contains(where: { $0.name == "exit" && $0.value == "true" }) {
             print("[InAppBrowser] Exit parameter detected in URL, closing WebView")
-            DispatchQueue.main.async { [weak self] in
-                self?.closeView()
-            }
+            DispatchQueue.main.async { [weak self] in self?.closeView() }
             decisionHandler(.cancel)
             return
         }
 
-        // Check if the URL is an App Store URL
         if u.absoluteString.contains("apps.apple.com") {
             UIApplication.shared.open(u, options: [:], completionHandler: nil)
             decisionHandler(.cancel)
@@ -1654,7 +1417,8 @@ extension WKWebViewController: WKNavigationDelegate {
             actionPolicy = .cancel
         }
 
-        if let navigationType = NavigationType(rawValue: navigationAction.navigationType.rawValue), let result = delegate?.webViewController?(self, decidePolicy: u, navigationType: navigationType) {
+        if let navigationType = NavigationType(rawValue: navigationAction.navigationType.rawValue),
+           let result = delegate?.webViewController?(self, decidePolicy: u, navigationType: navigationType) {
             actionPolicy = result ? .allow : .cancel
         }
 
@@ -1663,54 +1427,37 @@ extension WKWebViewController: WKNavigationDelegate {
 
     private func handleCameraPermission() {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
-
         switch status {
         case .notDetermined:
-            // First time request
             let alertController = UIAlertController(
                 title: "Camera Access",
                 message: "This app needs access to your camera. Allow access?",
                 preferredStyle: .alert
             )
-
             alertController.addAction(UIAlertAction(title: "Allow", style: .default) { _ in
                 AVCaptureDevice.requestAccess(for: .video) { granted in
                     print("Camera permission granted: \(granted)")
-                    if granted {
-                        DispatchQueue.main.async {
-                            self.capBrowserPlugin?.notifyListeners("cameraAccessGranted", data: [:])
-                        }
-                    }
+                    if granted { DispatchQueue.main.async { self.capBrowserPlugin?.notifyListeners("cameraAccessGranted", data: [:]) } }
                 }
             })
-
             alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-
             self.present(alertController, animated: true)
-
         case .restricted, .denied:
-            // Show settings alert
             let alertController = UIAlertController(
-            title: "Доступ к камере запрещен",
-            message: "Пожалуйста, включите доступ к камере в настройках устройства",
-            preferredStyle: .alert
-)
-
+                title: "Доступ к камере запрещен",
+                message: "Пожалуйста, включите доступ к камере в настройках устройства",
+                preferredStyle: .alert
+            )
             alertController.addAction(UIAlertAction(title: "Открыть настройки", style: .default) { _ in
                 if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(settingsUrl)
                 }
             })
-
             alertController.addAction(UIAlertAction(title: "Отмена", style: .cancel))
-
             self.present(alertController, animated: true)
-
         case .authorized:
-            // Camera access already granted
             print("Camera access already granted")
             self.capBrowserPlugin?.notifyListeners("cameraAccessGranted", data: [:])
-
         @unknown default:
             break
         }
@@ -1718,11 +1465,7 @@ extension WKWebViewController: WKNavigationDelegate {
 
     private func handleMicrophonePermission() {
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
-                if granted {
-                    self.capBrowserPlugin?.notifyListeners("microphoneAccessGranted", data: [:])
-                }
-            }
+            DispatchQueue.main.async { if granted { self.capBrowserPlugin?.notifyListeners("microphoneAccessGranted", data: [:]) } }
         }
     }
 
@@ -1732,52 +1475,33 @@ extension WKWebViewController: WKNavigationDelegate {
     }
 
     private func handleNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            DispatchQueue.main.async {
-                if granted {
-                    self.capBrowserPlugin?.notifyListeners("notificationAccessGranted", data: [:])
-                }
-            }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            DispatchQueue.main.async { if granted { self.capBrowserPlugin?.notifyListeners("notificationAccessGranted", data: [:]) } }
         }
     }
 
     private func handleContactsPermission() {
         let store = CNContactStore()
-        store.requestAccess(for: .contacts) { granted, error in
-            DispatchQueue.main.async {
-                if granted {
-                    self.capBrowserPlugin?.notifyListeners("contactsAccessGranted", data: [:])
-                }
-            }
+        store.requestAccess(for: .contacts) { granted, _ in
+            DispatchQueue.main.async { if granted { self.capBrowserPlugin?.notifyListeners("contactsAccessGranted", data: [:]) } }
         }
     }
 
     private func handleCalendarPermission() {
         let eventStore = EKEventStore()
-        eventStore.requestAccess(to: .event) { granted, error in
-            DispatchQueue.main.async {
-                if granted {
-                    self.capBrowserPlugin?.notifyListeners("calendarAccessGranted", data: [:])
-                }
-            }
+        eventStore.requestAccess(to: .event) { granted, _ in
+            DispatchQueue.main.async { if granted { self.capBrowserPlugin?.notifyListeners("calendarAccessGranted", data: [:]) } }
         }
     }
 
     private func handleGalleryPermission() {
         PHPhotoLibrary.requestAuthorization { status in
-            DispatchQueue.main.async {
-                if status == .authorized {
-                    self.capBrowserPlugin?.notifyListeners("galleryAccessGranted", data: [:])
-                }
-            }
+            DispatchQueue.main.async { if status == .authorized { self.capBrowserPlugin?.notifyListeners("galleryAccessGranted", data: [:]) } }
         }
     }
 }
 
-class BlockBarButtonItem: UIBarButtonItem {
-
-    var block: ((WKWebViewController) -> Void)?
-}
+class BlockBarButtonItem: UIBarButtonItem { var block: ((WKWebViewController) -> Void)? }
 
 extension WKNavigationActionPolicy {
     static let preventDeeplinkActionPolicy = WKNavigationActionPolicy(rawValue: WKNavigationActionPolicy.allow.rawValue + 2)!
