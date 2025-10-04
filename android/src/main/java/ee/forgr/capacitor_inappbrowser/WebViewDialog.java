@@ -43,6 +43,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -150,6 +151,10 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
 
     private final ActivityResultLauncher<Intent> fileChooserLauncher;
     private final ActivityResultLauncher<Intent> cameraLauncher;
+    private View mCustomView;
+    private WebChromeClient.CustomViewCallback mCustomViewCallback;
+    private int mOriginalSystemUiVisibility;
+    private int mOriginalOrientation;
 
     public static final int CAMERA_PERMISSION_REQUEST_CODE = 1001;
 
@@ -258,6 +263,31 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
         }
     }
 
+    private class ClipboardBridge {
+        private final android.content.ClipboardManager cm;
+
+        ClipboardBridge(Context ctx) {
+            cm = (android.content.ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+        }
+
+        @JavascriptInterface
+        public void writeText(String text) {
+            if (text == null) text = "";
+            android.content.ClipData clip = android.content.ClipData.newPlainText("text", text);
+            cm.setPrimaryClip(clip);
+        }
+
+        @JavascriptInterface
+        public String readText() {
+            if (!cm.hasPrimaryClip()) return "";
+            android.content.ClipData clip = cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) return "";
+            CharSequence cs = clip.getItemAt(0).coerceToText(_context);
+            return cs == null ? "" : cs.toString();
+        }
+    }
+
+
     public WebViewDialog(
             Context context,
             int theme,
@@ -338,6 +368,8 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
 
         // Add JavaScript interface
         _webView.addJavascriptInterface(new JavaScriptInterface(), "mobileApp");
+        _webView.addJavascriptInterface(new ClipboardBridge(_context), "ClipboardBridge");
+
 
         // WebView settings
         WebSettings webSettings = _webView.getSettings();
@@ -1581,6 +1613,7 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                injectClipboardPolyfill();
                 if (loadingSpinner != null) loadingSpinner.setVisibility(View.GONE);
                 if (!isInitialized) {
                     isInitialized = true;
@@ -1627,6 +1660,38 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
         });
     }
 
+    private void injectClipboardPolyfill() {
+        if (_webView == null) return;
+        String script = """
+        (function () {
+          try {
+            if (!navigator.clipboard) {
+              navigator.clipboard = {};
+            }
+            // Полифилл writeText
+            navigator.clipboard.writeText = async function(text) {
+              try {
+                window.ClipboardBridge.writeText(String(text ?? ''));
+                return;
+              } catch (e) {
+                throw e;
+              }
+            };
+            // Полифилл readText
+            navigator.clipboard.readText = async function() {
+              try {
+                return window.ClipboardBridge.readText();
+              } catch (e) {
+                throw e;
+              }
+            };
+          } catch (e) {
+            console.error('Clipboard polyfill init error', e);
+          }
+        })();
+    """;
+        _webView.evaluateJavascript(script, null);
+    }
 
     @Override
     public void onBackPressed() {
@@ -1947,6 +2012,11 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
     private class MyWebChromeClient extends WebChromeClient {
 
         @Override
+        public void onGeolocationPermissionsShowPrompt(String origin, android.webkit.GeolocationPermissions.Callback callback) {
+            callback.invoke(origin, true, true);
+        }
+
+        @Override
         public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
             // создаём временный WebView, в который Android попытается загрузить popup-URL,
             // а мы всё перехватим и направим в основной _webView
@@ -1972,24 +2042,86 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
         }
 
         @Override
-        public void onGeolocationPermissionsShowPrompt(
-                String origin,
-                android.webkit.GeolocationPermissions.Callback callback
-        ) {
-            callback.invoke(origin, true, true);
+        public void onPermissionRequest(PermissionRequest request) {
+            // Раз уже дал пермишены приложению — сразу выдаём их WebView
+            try { request.grant(request.getResources()); } catch (Throwable t) { request.deny(); }
         }
 
+        // === FULLSCREEN API ===
         @Override
-        public void onPermissionRequest(PermissionRequest request) {
-            // Раз у приложения уже есть нужные runtime-пермишны,
-            // просто отдаём их WebView, НЕ спрашивая пользователя
-            try {
-                request.grant(request.getResources());
-            } catch (Throwable t) {
-                request.deny(); // на всякий случай
+        public void onShowCustomView(View view, CustomViewCallback callback) {
+            if (mCustomView != null) {
+                callback.onCustomViewHidden();
+                return;
+            }
+            Window window = getWindow();
+            if (window == null) {
+                callback.onCustomViewHidden();
+                return;
+            }
+            mCustomView = view;
+            mCustomViewCallback = callback;
+
+            View decor = window.getDecorView();
+            mOriginalSystemUiVisibility = decor.getSystemUiVisibility();
+            mOriginalOrientation = activity.getRequestedOrientation();
+
+            // Добавляем full-screen слой поверх диалога
+            FrameLayout decorView = (FrameLayout) decor;
+            decorView.addView(mCustomView, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Прячем статус/навигацию, чтобы реально был fullscreen
+            int flags =
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+            decor.setSystemUiVisibility(flags);
+
+            // На всякий – выключим авто-флаг fit system windows
+            if (Build.VERSION.SDK_INT >= 30) {
+                window.setDecorFitsSystemWindows(false);
             }
         }
 
+        @Override
+        public void onHideCustomView() {
+            if (mCustomView == null) return;
+            Window window = getWindow();
+            View decor = window != null ? window.getDecorView() : null;
+
+            // Убираем наш full-screen view
+            if (decor instanceof FrameLayout) {
+                ((FrameLayout) decor).removeView(mCustomView);
+            }
+            mCustomView = null;
+
+            // Возвращаем системные флаги
+            if (decor != null) {
+                decor.setSystemUiVisibility(mOriginalSystemUiVisibility);
+            }
+            activity.setRequestedOrientation(mOriginalOrientation);
+
+            // Сообщаем веб-клиенту
+            if (mCustomViewCallback != null) {
+                mCustomViewCallback.onCustomViewHidden();
+                mCustomViewCallback = null;
+            }
+
+            // Вернём decorFits если надо
+            if (Build.VERSION.SDK_INT >= 30 && getWindow() != null) {
+                getWindow().setDecorFitsSystemWindows(true);
+            }
+        }
+
+
+
+
+        /// //
         @Override
         public boolean onShowFileChooser(
                 WebView webView,
@@ -2068,26 +2200,6 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
             }
             return true;
         }
-
-//        @Override
-//        public void onPermissionRequest(PermissionRequest request) {
-//            if (activity == null) {
-//                request.deny();
-//                return;
-//            }
-//
-//            String[] resources = request.getResources();
-//            for (String resource : resources) {
-//                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
-//                    request.deny();
-//                    return;
-//                } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
-//                    request.deny();
-//                    return;
-//                }
-//            }
-//            request.deny();
-//        }
     }
 
     @Override
