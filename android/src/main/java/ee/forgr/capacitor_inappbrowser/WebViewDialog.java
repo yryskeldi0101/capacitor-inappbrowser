@@ -352,6 +352,7 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
         webSettings.setAllowUniversalAccessFromFileURLs(true);
         webSettings.setMediaPlaybackRequiresUserGesture(false);
         webSettings.setSupportMultipleWindows(true);
+        webSettings.setGeolocationEnabled(true);
 
         if (_options.getTextZoom() > 0) {
             webSettings.setTextZoom(_options.getTextZoom());
@@ -380,10 +381,14 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
 
                             if (diffX > 0) {
                                 // свайп СЛЕВА -> НАПРАВО (right swipe) => "назад"
-                                if (_webView != null && _webView.canGoBack()) { _webView.goBack(); }
+                                if (_webView != null && _webView.canGoBack()) {
+                                    _webView.goBack();
+                                }
                             } else {
                                 // свайп СПРАВА -> НАЛЕВО (left swipe) => "вперёд"
-                                if (_webView != null && _webView.canGoForward()) { _webView.goForward(); }
+                                if (_webView != null && _webView.canGoForward()) {
+                                    _webView.goForward();
+                                }
                             }
                             return true; // событие обработано
                         }
@@ -423,6 +428,7 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
             _options.getPluginCall().resolve();
         }
     }
+
     private boolean handleSpecialSchemes(Activity activity, WebView mainWebView, String url) {
         if (url == null) return false;
         final String lower = url.toLowerCase();
@@ -1966,6 +1972,25 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
         }
 
         @Override
+        public void onGeolocationPermissionsShowPrompt(
+                String origin,
+                android.webkit.GeolocationPermissions.Callback callback
+        ) {
+            callback.invoke(origin, true, true);
+        }
+
+        @Override
+        public void onPermissionRequest(PermissionRequest request) {
+            // Раз у приложения уже есть нужные runtime-пермишны,
+            // просто отдаём их WebView, НЕ спрашивая пользователя
+            try {
+                request.grant(request.getResources());
+            } catch (Throwable t) {
+                request.deny(); // на всякий случай
+            }
+        }
+
+        @Override
         public boolean onShowFileChooser(
                 WebView webView,
                 ValueCallback<Uri[]> filePathCallback,
@@ -2044,25 +2069,25 @@ public class WebViewDialog extends Dialog implements ActivityCompat.OnRequestPer
             return true;
         }
 
-        @Override
-        public void onPermissionRequest(PermissionRequest request) {
-            if (activity == null) {
-                request.deny();
-                return;
-            }
-
-            String[] resources = request.getResources();
-            for (String resource : resources) {
-                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
-                    request.deny();
-                    return;
-                } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
-                    request.deny();
-                    return;
-                }
-            }
-            request.deny();
-        }
+//        @Override
+//        public void onPermissionRequest(PermissionRequest request) {
+//            if (activity == null) {
+//                request.deny();
+//                return;
+//            }
+//
+//            String[] resources = request.getResources();
+//            for (String resource : resources) {
+//                if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) {
+//                    request.deny();
+//                    return;
+//                } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+//                    request.deny();
+//                    return;
+//                }
+//            }
+//            request.deny();
+//        }
     }
 
     @Override
